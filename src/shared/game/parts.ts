@@ -29,6 +29,19 @@ export const SLOT_LABEL: Record<Slot, string> = {
   chip: 'Pilot chip',
 };
 
+export const SLOT_SHORT: Record<Slot, string> = {
+  head: 'Head',
+  core: 'Core',
+  arms: 'Arms',
+  legs: 'Legs',
+  booster: 'Boost',
+  generator: 'Power',
+  weaponR: 'R.Hand',
+  weaponL: 'L.Hand',
+  back: 'Back',
+  chip: 'Chip',
+};
+
 export type DamageType = 'kinetic' | 'energy' | 'explosive' | 'melee';
 export type LegType = 'biped' | 'reverse' | 'quad' | 'tank' | 'hover';
 export type Behavior =

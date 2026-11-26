@@ -11,13 +11,14 @@ import {
 } from '../../shared/game/mech';
 import {
   SLOTS,
-  SLOT_LABEL,
+  SLOT_SHORT,
   getPart,
   partsForSlot,
   type Part,
   type Slot,
 } from '../../shared/game/parts';
-import { MechArt } from '../components/MechArt';
+import { PixelMech } from '../components/PixelMech';
+import { sfx } from '../lib/sfx';
 
 type Tab = Slot | 'paint';
 
@@ -135,8 +136,11 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
     () => computeStats(build, arena, tax),
     [build, arena, tax]
   );
-  const set = (slot: Slot, id: string) =>
+  const set = (slot: Slot, id: string) => {
+    if (build.parts[slot] !== id) sfx.equip();
     onChange({ ...build, parts: { ...build.parts, [slot]: id } });
+  };
+  const partsKey = JSON.stringify(build.parts);
 
   return (
     <div className="flex flex-col gap-3">
@@ -145,7 +149,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
           ← Back
         </button>
         <input
-          className="flex-1 min-w-0 font-display font-black text-2xl bg-transparent border-b-3 border-ink outline-none px-1"
+          className="flex-1 min-w-0 font-display font-black text-xl bg-transparent border-b-3 border-ink outline-none px-1"
           style={{ borderBottomWidth: 3 }}
           value={build.name}
           maxLength={18}
@@ -156,7 +160,13 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
       </div>
 
       <div className="sticker p-3 flex gap-3 items-center">
-        <MechArt build={build} size={120} />
+        <PixelMech
+          key={partsKey}
+          build={build}
+          size={120}
+          bob
+          className="pop"
+        />
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <Bar label="HP" value={st.hp} max={6000} text={`${st.hp}`} />
           <Bar
@@ -222,7 +232,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
             onClick={() => setTab(t)}
           >
             <div className="font-display font-black text-[13px] uppercase truncate">
-              {t === 'paint' ? 'Paint' : SLOT_LABEL[t]}
+              {t === 'paint' ? 'Paint' : SLOT_SHORT[t]}
             </div>
             <div
               className={`text-[10px] truncate ${tab === t ? 'text-paper' : 'text-mute'}`}
@@ -297,12 +307,13 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
             return (
               <button
                 key={p.id}
+                data-quiet
                 className={`sticker p-2.5 text-left ${active ? 'bg-sun' : ''}`}
                 style={active ? { background: '#ffe08a' } : undefined}
                 onClick={() => set(tab, p.id)}
               >
                 <div className="flex items-center gap-2">
-                  <div className="font-display font-black text-xl leading-none">
+                  <div className="font-display font-black text-lg leading-none">
                     {p.name}
                   </div>
                   {active && (

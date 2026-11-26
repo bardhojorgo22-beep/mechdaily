@@ -358,19 +358,13 @@ const decal = (id: number, c: Ctx): ReactNode => {
       );
     case 'number':
       return (
-        <text
-          x={100}
-          y={122}
-          textAnchor="middle"
-          fontSize={22}
-          fontWeight={800}
-          fill={c.trim}
-          stroke={INK}
-          strokeWidth={1.5}
-          fontFamily="'Big Shoulders Display', sans-serif"
-        >
-          07
-        </text>
+        <g fill={c.trim} {...g}>
+          <path
+            d="M86 102 H98 V124 H86 Z M90 106 V120 H94 V106 Z"
+            fillRule="evenodd"
+          />
+          <path d="M102 102 H114 V108 L108 124 H103 L109 107 H102 Z" />
+        </g>
       );
     case 'hazard':
       return (

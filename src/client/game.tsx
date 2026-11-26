@@ -24,8 +24,9 @@ import { DEFAULT_BUILD, type Build, type Tax } from '../shared/game/mech';
 import { getPart } from '../shared/game/parts';
 import { winsFor } from '../shared/game/tournament';
 import { BattleView } from './components/BattleView';
-import { MechArt } from './components/MechArt';
+import { PixelMech } from './components/PixelMech';
 import { api, countdown } from './lib/api';
+import { isMuted, onMuteChange, setMuted, sfx } from './lib/sfx';
 import { Garage } from './screens/Garage';
 
 type Fight = {
@@ -42,10 +43,30 @@ type Screen =
 const postUrl = (postId: string) =>
   `https://www.reddit.com/r/${context.subredditName}/comments/${postId.replace(/^t3_/, '')}`;
 
+const MuteButton = () => {
+  const [m, setM] = useState(isMuted());
+  useEffect(() => {
+    const off = onMuteChange(setM);
+    return () => {
+      off();
+    };
+  }, []);
+  return (
+    <button
+      data-quiet
+      className="btn bg-card text-xs px-2 py-1"
+      aria-label={m ? 'Unmute' : 'Mute'}
+      onClick={() => setMuted(!m)}
+    >
+      {m ? '🔇' : '🔊'}
+    </button>
+  );
+};
+
 const Header = ({ data }: { data: InitResponse }) => (
-  <div className="flex items-end justify-between">
+  <div className="flex items-end justify-between gap-2">
     <div>
-      <div className="font-display font-black text-4xl leading-[0.85] tracking-tight">
+      <div className="font-display font-black text-3xl leading-[0.85] tracking-tight">
         MECH DAILY
       </div>
       <div className="text-[11px] text-mute mt-1">
@@ -53,20 +74,23 @@ const Header = ({ data }: { data: InitResponse }) => (
         {data.entryCount === 1 ? '' : 's'} entered
       </div>
     </div>
-    {data.faction && (
-      <span
-        className="tag py-0.5"
-        style={{ background: FACTIONS[data.faction].color }}
-      >
-        {FACTIONS[data.faction].name}
-      </span>
-    )}
+    <div className="flex items-center gap-2">
+      {data.faction && (
+        <span
+          className="tag py-0.5"
+          style={{ background: FACTIONS[data.faction].color }}
+        >
+          {FACTIONS[data.faction].name}
+        </span>
+      )}
+      <MuteButton />
+    </div>
   </div>
 );
 
 const FactionPicker = ({ onPick }: { onPick: (f: FactionId) => void }) => (
   <div className="fixed inset-0 z-20 grid-paper flex flex-col justify-center p-4 gap-3">
-    <div className="font-display font-black text-4xl leading-none">
+    <div className="font-display font-black text-3xl leading-none">
       Pick a side
     </div>
     <div className="text-sm">
@@ -89,7 +113,7 @@ const FactionPicker = ({ onPick }: { onPick: (f: FactionId) => void }) => (
             }}
           />
           <div>
-            <div className="font-display font-black text-2xl leading-none">
+            <div className="font-display font-black text-xl leading-none">
               {f.name}
             </div>
             <div className="text-xs">{f.motto}</div>
@@ -145,6 +169,19 @@ export const App = () => {
       .catch((e: unknown) =>
         setError(e instanceof Error ? e.message : 'Could not load')
       );
+  }, []);
+
+  // every button clicks, unless it makes its own sound
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el =
+        e.target instanceof Element
+          ? e.target.closest('button, summary')
+          : null;
+      if (el && !el.closest('[data-quiet]')) sfx.click();
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
   }, []);
 
   useEffect(() => {
@@ -249,7 +286,7 @@ export const App = () => {
   if (error)
     return (
       <div className="grid-paper min-h-screen p-6 flex flex-col gap-3 justify-center">
-        <div className="font-display font-black text-3xl">Something broke.</div>
+        <div className="font-display font-black text-2xl">Something broke.</div>
         <div className="text-sm">{error}</div>
         <button
           className="btn bg-sun"
@@ -264,7 +301,7 @@ export const App = () => {
     );
   if (!data)
     return (
-      <div className="grid-paper min-h-screen flex items-center justify-center font-display font-black text-2xl">
+      <div className="grid-paper min-h-screen flex items-center justify-center font-display font-black text-xl">
         WARMING UP…
       </div>
     );
@@ -317,7 +354,7 @@ export const App = () => {
                   bracket in {countdown(data.nextRolloverIso)}
                 </div>
               </div>
-              <div className="font-display font-black text-3xl leading-none mt-1">
+              <div className="font-display font-black text-2xl leading-none mt-1">
                 {arena.name}
               </div>
               <div className="text-sm mt-1">{arena.blurb}</div>
@@ -341,10 +378,10 @@ export const App = () => {
             </div>
 
             <div className="sticker p-3 flex gap-3 items-center">
-              <MechArt build={build} size={110} />
+              <PixelMech build={build} size={110} bob />
               <div className="flex-1 min-w-0 flex flex-col gap-2">
                 <div>
-                  <div className="font-display font-black text-2xl leading-none truncate">
+                  <div className="font-display font-black text-xl leading-none truncate">
                     {build.name}
                   </div>
                   <div className="text-[11px] text-mute">
@@ -395,7 +432,7 @@ export const App = () => {
                 <div className="text-[11px] font-semibold text-mute">
                   DAY {data.last.dayNumber} RESULT
                 </div>
-                <div className="font-display font-black text-2xl leading-none mt-1">
+                <div className="font-display font-black text-xl leading-none mt-1">
                   🏆 {data.last.championName}
                 </div>
                 <div className="text-xs">
@@ -476,7 +513,7 @@ export const App = () => {
               >
                 ← Back
               </button>
-              <div className="font-display font-black text-3xl">Practice</div>
+              <div className="font-display font-black text-2xl">Practice</div>
             </div>
             <div className="text-xs">
               Fights happen in today's arena: {arena.name}. Nothing here counts.
@@ -490,9 +527,9 @@ export const App = () => {
                 className="sticker p-2 flex items-center gap-3 text-left"
                 onClick={() => practice(b, 'sparring bot')}
               >
-                <MechArt build={b} size={56} />
+                <PixelMech build={b} size={56} />
                 <div className="flex-1">
-                  <div className="font-display font-black text-xl leading-none">
+                  <div className="font-display font-black text-lg leading-none">
                     {b.name}
                   </div>
                   <div className="text-[11px] text-mute">
@@ -515,9 +552,9 @@ export const App = () => {
                 className="sticker p-2 flex items-center gap-3 text-left"
                 onClick={() => practice(c.build, `Day ${c.dayNumber} champ`)}
               >
-                <MechArt build={c.build} size={56} />
+                <PixelMech build={c.build} size={56} />
                 <div className="flex-1">
-                  <div className="font-display font-black text-xl leading-none">
+                  <div className="font-display font-black text-lg leading-none">
                     🏆 {c.name}
                   </div>
                   <div className="text-[11px] text-mute">
@@ -553,7 +590,7 @@ export const App = () => {
               >
                 ← Back
               </button>
-              <div className="font-display font-black text-3xl">
+              <div className="font-display font-black text-2xl">
                 {results ? `Day ${results.dayNumber} bracket` : 'Loading…'}
               </div>
             </div>
@@ -577,7 +614,7 @@ export const App = () => {
               >
                 ← Back
               </button>
-              <div className="font-display font-black text-3xl">
+              <div className="font-display font-black text-2xl">
                 Faction war
               </div>
             </div>
@@ -675,12 +712,12 @@ const Bracket = ({
   return (
     <div className="flex flex-col gap-3">
       <div className="sticker p-3 flex gap-3 items-center">
-        <MechArt build={champ.build} size={90} />
+        <PixelMech build={champ.build} size={90} />
         <div>
           <div className="text-[11px] font-semibold text-mute">
             CHAMPION · {arena.name.toUpperCase()}
           </div>
-          <div className="font-display font-black text-3xl leading-none">
+          <div className="font-display font-black text-2xl leading-none">
             🏆 {champ.build.name}
           </div>
           <div className="text-xs">{label(t.champion)}</div>
