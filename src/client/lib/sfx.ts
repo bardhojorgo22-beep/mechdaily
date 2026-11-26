@@ -19,6 +19,14 @@ const audio = (): AudioContext | null => {
   if (muted) return null;
   try {
     if (!ctx) {
+      // iOS: play web audio even when the ring/silent switch is on
+      const nav: unknown = navigator;
+      const session: unknown =
+        nav && typeof nav === 'object'
+          ? Reflect.get(nav, 'audioSession')
+          : null;
+      if (session && typeof session === 'object')
+        Reflect.set(session, 'type', 'playback');
       ctx = new AudioContext();
       master = ctx.createGain();
       master.gain.value = 0.35;
@@ -34,6 +42,32 @@ const audio = (): AudioContext | null => {
   }
 };
 
+/**
+ * Browsers only allow sound after a user gesture *inside this frame*.
+ * Unlock on the very first touch/click/key, and keep resuming if the
+ * webview suspends us (e.g. app switched to background).
+ */
+const unlock = () => {
+  const a = audio();
+  if (!a || !master) return;
+  if (a.state !== 'running') void a.resume();
+  // a silent blip forces some mobile webviews to actually start the output
+  const o = a.createOscillator();
+  const g = a.createGain();
+  g.gain.value = 0.0001;
+  o.connect(g).connect(master);
+  o.start();
+  o.stop(a.currentTime + 0.02);
+};
+if (typeof window !== 'undefined') {
+  for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) {
+    window.addEventListener(ev, unlock, { capture: true, passive: true });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && ctx && !muted) void ctx.resume();
+  });
+}
+
 export const isMuted = () => muted;
 export const setMuted = (m: boolean) => {
   muted = m;
@@ -43,6 +77,7 @@ export const setMuted = (m: boolean) => {
     /* storage can be unavailable in some webviews */
   }
   if (m && ctx) void ctx.suspend();
+  if (!m) unlock();
   listeners.forEach((l) => l(m));
 };
 export const onMuteChange = (l: (m: boolean) => void) => {
