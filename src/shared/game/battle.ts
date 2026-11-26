@@ -23,6 +23,18 @@ export type ShotEvent = {
   stagger?: boolean; // a big ranged hit stopped a charging target in its tracks
   ram?: boolean; // Velocity: a full-speed crash, not a weapon
   syn?: SynergyId; // a hidden synergy made this happen
+  bashed?: boolean; // a riot shield stunned the attacker
+  gamble?: 'x2' | 'half'; // Gambler chip rolled
+};
+
+/** Things that happen that aren't shots: mines, smoke, barrier breaks. Positions in arena metres. */
+export type MiscEvent = {
+  t: number;
+  by: 0 | 1;
+  kind: 'mine-drop' | 'mine-boom' | 'smoke' | 'barrier-break';
+  x: number;
+  y: number;
+  until?: number;
 };
 
 /** Once-per-fight pilot chip special moves. */
@@ -50,6 +62,15 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
   flank: {
     name: 'Afterburner',
     blurb: 'Below 80% HP: 3.6s sprint around the enemy, very hard to hit, +20% damage.',
+  },
+  juggernaut: {
+    name: 'Unstoppable',
+    blurb:
+      'Passive: immune to stagger, knockback, pulls, yanks and slows, and shrugs off 8% of all damage. A bit slower.',
+  },
+  gambler: {
+    name: 'Double or Nothing',
+    blurb: 'Passive: every hit has a 22% chance to deal double and a 10% chance to deal half.',
   },
   velocity: {
     name: 'Terminal Velocity',
@@ -98,6 +119,7 @@ export type BattleResult = {
   specials: SpecialEvent[];
   moves: MoveEvent[];
   lastStands: LastStandEvent[];
+  misc: MiscEvent[];
 };
 
 type MechState = {
@@ -135,6 +157,14 @@ type MechState = {
   burnUntil: number; // Inferno: on fire
   burnDps: number;
   backoffUntil: number; // hybrid pilots: retreat to shoot after a melee strike
+  chill: number; // 0..0.55 slow from frost
+  acid: number; // armor melted away
+  spin: number; // minigun spin-up 0..1
+  barrierHp: number;
+  nextMine: number;
+  mines: { x: number; y: number; armed: number }[];
+  smokeUntil: number;
+  nextSmoke: number;
   ramUntil: number; // Velocity ram in progress
 };
 
@@ -174,6 +204,14 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   burnUntil: 0,
   burnDps: 0,
   backoffUntil: 0,
+  chill: 0,
+  acid: 0,
+  spin: 0,
+  barrierHp: s.barrier?.hp ?? 0,
+  nextMine: 20,
+  mines: [],
+  smokeUntil: 0,
+  nextSmoke: 40,
   ramUntil: 0,
 });
 
@@ -329,6 +367,8 @@ const ORBIT: Record<MechStats['behavior'], number> = {
   flank: 0.95,
   redshift: 0.7,
   velocity: 0.85,
+  juggernaut: 0.3,
+  gambler: 0.6,
 };
 
 export type Fighter = {
@@ -358,6 +398,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
   const invuln = (m: MechState) => m.lastStand >= 0 && tick < m.lastStand + LAST_STAND_INVULN;
   const stripped = (m: MechState) => m.lastStand >= 0;
   const syn = (m: MechState, id: SynergyId) => m.s.synergies.includes(id);
+  const jug = (m: MechState) => m.s.behavior === 'juggernaut';
+  const misc: MiscEvent[] = [];
   const active = (m: MechState, kind: MechStats['behavior']) => m.s.behavior === kind && m.specialUntil > tick;
   const frames: number[] = [];
   const events: ShotEvent[] = [];
@@ -456,6 +498,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       if (active(me, 'flank')) speed = me.s.speed * 1.6;
       if (active(me, 'redshift')) speed = me.s.speed * 2;
       if (stripped(me)) speed *= 1.2; // nothing left to carry
+      if (jug(me)) speed *= 0.96;
+      speed *= 1 - me.chill; // frostbitten
       if (me.s.behavior === 'velocity') {
         // momentum: crawl at first, build up while moving, ram at full speed
         if (me.moving && tick >= me.ramUntil) me.momentum = Math.min(1, me.momentum + DT / 7);
@@ -604,7 +648,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       let py = 0;
       // polarity flips to suit its owner: pull when they want closer, repel when they want space
       const gap = dist - foe.want;
-      if (foe.s.pull > 0 && dist > 110 && dist < 620 && Math.abs(gap) > 40 && !active(me, 'redshift')) {
+      if (foe.s.pull > 0 && dist > 110 && dist < 620 && Math.abs(gap) > 40 && !active(me, 'redshift') && !jug(me)) {
         const pileIdx = foe.s.weapons.findIndex((x) => x.partId === 'r-pile');
         const trapSet = syn(foe, 'beartrap') && pileIdx >= 0 && foe.cooldown[pileIdx]! <= 6;
         const drag = (foe.s.pull / (1 + me.s.weight / 120)) * (gap > 0 ? (trapSet ? 1.5 : 1) : -0.8);
@@ -632,6 +676,46 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const sp = Math.sqrt(me.vx * me.vx + me.vy * me.vy);
       me.moving = sp > 8;
       me.moveFrac = clamp(sp / Math.max(1, me.s.speed), 0, 1.5);
+    }
+
+    // ── statuses, mines, smoke, barrier ──
+    for (let i = 0; i < 2; i++) {
+      const m = mechs[i]!;
+      const o = mechs[1 - i]!;
+      const by: 0 | 1 = i === 0 ? 0 : 1;
+      m.chill = Math.max(0, m.chill - 0.12 * DT);
+      m.spin = Math.max(0, m.spin - 0.012);
+      if (m.s.barrier && m.barrierHp < m.s.barrier.hp)
+        m.barrierHp = Math.min(m.s.barrier.hp, m.barrierHp + m.s.barrier.regen * DT);
+      if (m.s.mines && tick >= m.nextMine && !passive[i]) {
+        m.nextMine = tick + m.s.mines.every;
+        m.mines.push({ x: m.x, y: m.y, armed: tick + 10 });
+        if (m.mines.length > 4) m.mines.shift();
+        misc.push({ t: tick, by, kind: 'mine-drop', x: m.x, y: m.y });
+      }
+      for (let k = m.mines.length - 1; k >= 0; k--) {
+        const mn = m.mines[k]!;
+        if (tick < mn.armed) continue;
+        const md = Math.hypot(o.x - mn.x, o.y - mn.y);
+        if (md > 60) continue;
+        m.mines.splice(k, 1);
+        misc.push({ t: tick, by, kind: 'mine-boom', x: mn.x, y: mn.y });
+        if (invuln(o)) continue;
+        const dmg = m.s.mines!.damage * DAMAGE_SCALE * (stripped(o) ? 1 : 1 - armorAgainst(o.s, 'explosive'));
+        o.hp -= dmg;
+        m.dealt += dmg;
+        if (!jug(o)) {
+          const away = md || 1;
+          o.vx += ((o.x - mn.x) / away) * 140;
+          o.vy += ((o.y - mn.y) / away) * 140;
+        }
+      }
+      const od = Math.hypot(o.x - m.x, o.y - m.y);
+      if (m.s.smoke && tick >= m.nextSmoke && od < 950 && !passive[i]) {
+        m.nextSmoke = tick + m.s.smoke.every;
+        m.smokeUntil = tick + m.s.smoke.dur;
+        misc.push({ t: tick, by, kind: 'smoke', x: m.x, y: m.y, until: m.smokeUntil });
+      }
     }
 
     // ── energy + heat ──
@@ -704,6 +788,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (crit) me.charged = false;
 
         me.cooldown[w] = syn(me, 'siege') && wp.partId === 'bk-howitzer' ? Math.round(wp.cooldown * 0.8) : wp.cooldown;
+        if (wp.spinUp) {
+          me.spin = Math.min(1, me.spin + 0.09);
+          me.cooldown[w] = Math.max(2, Math.round(wp.cooldown / (1 + 2 * me.spin)));
+        }
+        let bashed = false;
+        let gamble: 'x2' | 'half' | null = null;
         let synTag: SynergyId | null = null;
         // melee strikes lunge: the attacker jumps forward into the blow
         const closingSpeed = (me.vx * (foe.x - me.x) + me.vy * (foe.y - me.y)) / Math.max(1, dist);
@@ -742,6 +832,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         }
         if (active(foe, 'flank')) ev += 0.5;
         if (active(foe, 'redshift')) ev += 0.5;
+        if (foe.smokeUntil > tick) acc *= 0.45; // shooting into smoke
         if (stripped(foe)) ev += 0.1;
         if (foe.s.behavior === 'velocity') ev += 0.08 * foe.momentum;
         if (active(me, 'redshift')) acc *= 1.15;
@@ -761,6 +852,17 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         let staggerFlag = false;
         if (hit) {
           dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
+          if (wp.type === 'melee') dmg *= 1 + me.s.meleeBonus;
+          if (me.s.behavior === 'gambler') {
+            const roll = rng.next();
+            if (roll < 0.22) {
+              dmg *= 2;
+              gamble = 'x2';
+            } else if (roll < 0.32) {
+              dmg *= 0.5;
+              gamble = 'half';
+            }
+          }
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.9; // braced
           if (me.s.behavior === 'rush' && dist < 320) dmg *= 1.12; // up close and committed
           dmg *= me.dmgMult;
@@ -795,7 +897,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
             dmg *= 1.35;
             synTag = 'thunder';
           }
-          if (!stripped(foe) && !wp.pierce) dmg *= 1 - armorAgainst(foe.s, wp.type);
+          if (!stripped(foe) && !wp.pierce) dmg *= 1 - Math.max(0, armorAgainst(foe.s, wp.type) - foe.acid);
           const sh = foe.s.shield;
           // shields come up more while the holder is charging in
           const closing = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.3;
@@ -810,8 +912,13 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
                   ? Math.min(0.68, sh.block + 0.08)
                   : wp.type === 'melee' && sh.energyPerHit > 0
                     ? sh.block * 0.4
-                    : sh.block);
+                    : sh.block) *
+                  (wp.shred || wp.slam ? 0.5 : 1);
               blocked = true;
+              if (sh.bash > 0 && wp.type === 'melee' && !jug(me)) {
+                me.planted = Math.max(me.planted, sh.bash);
+                bashed = true;
+              }
             }
           }
           // a charged shot is a big moment, never a one-shot
@@ -827,7 +934,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               ? Math.min(9, Math.round(3 + (wp.damage * DAMAGE_SCALE * 4) / Math.max(40, foe.s.weight) / 8))
               : 0;
           const trapStagger = syn(me, 'beartrap') && wp.partId === 'r-pile' && !active(foe, 'turtle') ? 4 : 0;
-          const totalStagger = Math.max(staggerTicks, trapStagger);
+          const slamStagger = wp.slam && !active(foe, 'turtle') && tick >= foe.staggerImmune ? 6 : 0;
+          const totalStagger = jug(foe) ? 0 : Math.max(staggerTicks, trapStagger, slamStagger);
           staggerFlag = totalStagger > 0;
           if (invuln(foe)) {
             dmg = 0; // shots pass through the purge flash
@@ -838,6 +946,22 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           const kb = wp.partId === 'r-rail' ? 0.2 : { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
           const push = Math.min(170, (dmg * kb * 18) / Math.max(30, foe.s.weight));
           const d = dist || 1;
+          // on-hit statuses
+          if (dmg > 0 && !invuln(foe)) {
+            if (wp.chill && !jug(foe)) foe.chill = Math.min(0.55, foe.chill + wp.chill);
+            if (wp.shock) {
+              foe.energy = Math.max(0, foe.energy - wp.shock);
+              foe.ob = false;
+              foe.qbCd = Math.max(foe.qbCd, 10);
+            }
+            if (wp.acid) foe.acid = Math.min(0.25, foe.acid + wp.acid);
+            if (wp.yank && !jug(foe)) {
+              const pullBy = Math.min(wp.yank, Math.max(0, dist - Math.max(90, me.want))); // drag them to where I want them
+              foe.x = clamp(foe.x - ((foe.x - me.x) / d) * pullBy, 20, W - 20);
+              foe.y = clamp(foe.y - ((foe.y - me.y) / d) * pullBy, 20, H - 20);
+              foe.ob = false;
+            }
+          }
           // on-hit synergy effects
           if (dmg > 0 && syn(me, 'hunter') && wp.partId === 'r-bow') {
             foe.markedUntil = tick + 40;
@@ -863,6 +987,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           });
           me.dealt += dmg;
         }
+        if (!hit && wp.splash && !invuln(foe) && dist <= reach(me, wp, arena)) {
+          // grenades bounce and blow up near the target anyway
+          dmg = wp.damage * DAMAGE_SCALE * wp.splash * (stripped(foe) ? 1 : 1 - armorAgainst(foe.s, wp.type));
+          pending.push({ stagger: 0, target: i === 0 ? 1 : 0, dmg, kx: 0, ky: 0 });
+          me.dealt += dmg;
+        }
         events.push({
           t: tick,
           by: i === 0 ? 0 : 1,
@@ -875,6 +1005,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           ...(!hit && foe.qbUntil > tick ? { dodged: true } : {}),
           ...(hit && staggerFlag ? { stagger: true } : {}),
           ...(zapped ? { syn: 'guardian' as const } : synTag ? { syn: synTag } : {}),
+          ...(bashed ? { bashed: true } : {}),
+          ...(gamble ? { gamble } : {}),
         });
         // hybrid pilots back off after a melee strike to use their guns
         if (wp.type === 'melee') me.backoffUntil = tick + 16;
@@ -883,7 +1015,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     for (const p of pending) {
       const t = mechs[p.target]!;
       if (invuln(t)) continue;
-      t.hp -= p.dmg;
+      let dmgLeft = jug(t) ? p.dmg * 0.92 : p.dmg; // juggernauts shrug a little off
+      if (t.barrierHp > 0 && dmgLeft > 0) {
+        const soak = Math.min(t.barrierHp, dmgLeft);
+        t.barrierHp -= soak;
+        dmgLeft -= soak;
+        if (t.barrierHp <= 0) misc.push({ t: tick, by: p.target, kind: 'barrier-break', x: t.x, y: t.y });
+      }
+      t.hp -= dmgLeft;
       if (t.s.behavior === 'velocity' && p.dmg > 0)
         t.momentum = Math.max(0, t.momentum - 0.08 - (p.dmg / t.s.hp) * 1.3);
       if (p.stagger > 0) {
@@ -893,7 +1032,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         t.vy *= 0.3;
         t.staggerImmune = tick + p.stagger + 40; // no stagger-locking
       }
-      if (!active(t, 'turtle')) {
+      if (!active(t, 'turtle') && !jug(t)) {
         t.vx += p.kx;
         t.vy += p.ky;
       }
@@ -952,5 +1091,6 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     specials,
     moves,
     lastStands,
+    misc,
   };
 };

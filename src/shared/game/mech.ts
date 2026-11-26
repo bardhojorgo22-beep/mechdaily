@@ -114,7 +114,11 @@ export type MechStats = {
   legType: LegType;
   behavior: Behavior;
   weapons: MountedWeapon[];
-  shield: { block: number; energyPerHit: number } | null;
+  shield: { block: number; energyPerHit: number; bash: number } | null;
+  meleeBonus: number; // extra melee damage share
+  mines: { damage: number; every: number } | null;
+  smoke: { every: number; dur: number } | null;
+  barrier: { hp: number; regen: number } | null;
 };
 
 /** Popularity tax: popular parts get heavier and a little weaker. */
@@ -133,6 +137,10 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   let cooling = 0;
   let jam = 0;
   let pull = 0;
+  let meleeBonus = 0;
+  let mines: MechStats['mines'] = null;
+  let smoke: MechStats['smoke'] = null;
+  let barrier: MechStats['barrier'] = null;
   let rangeBonus = 0;
   let thrust = 0;
   let boostDrain = 0;
@@ -160,9 +168,11 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
         hp += part.hp * eff;
         accuracy *= 1 + (part.accuracy - 1) * eff;
         sensor = Math.max(sensor, part.sensor);
+        meleeBonus += (part.melee ?? 0) * eff;
         break;
       case 'core':
         hp += part.hp * eff;
+        output += (part.energy ?? 0) * eff;
         armorK += part.armorK * eff;
         armorE += part.armorE * eff;
         cooling += part.cooling * eff;
@@ -190,7 +200,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
         qbCost = part.qbCost;
         break;
       case 'generator':
-        output = part.output * eff;
+        output += part.output * eff;
         capacity = part.capacity;
         cooling += part.cooling;
         break;
@@ -209,6 +219,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
           shield = {
             block: part.shield.block * eff,
             energyPerHit: part.shield.energyPerHit,
+            bash: part.shield.bash ?? 0,
           };
         } else if ('utility' in part) {
           const u = part.utility;
@@ -220,6 +231,9 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
           cooling += (u.cooling ?? 0) * eff;
           jam += (u.jam ?? 0) * eff;
           pull += (u.pull ?? 0) * eff;
+          if (u.mines) mines = { damage: u.mines.damage * eff, every: u.mines.every };
+          if (u.smoke) smoke = u.smoke;
+          if (u.barrier) barrier = { hp: u.barrier.hp * eff, regen: u.barrier.regen };
           rangeBonus += (u.range ?? 0) * eff;
         }
     }
@@ -264,5 +278,9 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
       maxRange: wp.maxRange * (1 + rangeBonus),
     })),
     shield,
+    meleeBonus,
+    mines,
+    smoke,
+    barrier,
   };
 };

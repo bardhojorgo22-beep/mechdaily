@@ -44,7 +44,8 @@ export const SLOT_SHORT: Record<Slot, string> = {
 
 export type DamageType = 'kinetic' | 'energy' | 'explosive' | 'melee';
 export type LegType = 'biped' | 'reverse' | 'quad' | 'tank' | 'hover';
-export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank' | 'redshift' | 'velocity';
+export type Behavior =
+  'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank' | 'redshift' | 'velocity' | 'juggernaut' | 'gambler';
 
 export type Weapon = {
   type: DamageType;
@@ -60,6 +61,14 @@ export type Weapon = {
   heavy?: boolean; // non-tank legs must plant to fire
   charge?: boolean; // melee: hits harder the faster you're closing in
   pierce?: boolean; // ignores armor
+  chill?: number; // each hit slows the target (stacks)
+  shock?: number; // each hit drains this much energy and cuts boosts
+  acid?: number; // each hit strips this much armor for the rest of the fight
+  yank?: number; // each hit drags the target this many metres toward you
+  spinUp?: boolean; // fires faster the longer it keeps firing
+  splash?: number; // a miss still deals this share of the damage
+  slam?: boolean; // melee: shields only half block it, and it always staggers
+  shred?: boolean; // shields only half block it
 };
 
 type PartBase = {
@@ -75,6 +84,7 @@ export type HeadPart = PartBase & {
   hp: number;
   accuracy: number;
   sensor: number;
+  melee?: number; // melee damage bonus
 };
 export type CorePart = PartBase & {
   slot: 'core';
@@ -83,6 +93,7 @@ export type CorePart = PartBase & {
   armorE: number;
   cooling: number;
   load: number;
+  energy?: number; // extra power output
 };
 export type ArmsPart = PartBase & {
   slot: 'arms';
@@ -121,7 +132,7 @@ export type WeaponPart = PartBase & {
 };
 export type ShieldPart = PartBase & {
   slot: 'weaponL';
-  shield: { block: number; energyPerHit: number };
+  shield: { block: number; energyPerHit: number; bash?: number };
 };
 export type UtilityPart = PartBase & {
   slot: 'back';
@@ -135,6 +146,9 @@ export type UtilityPart = PartBase & {
     jam?: number;
     range?: number;
     pull?: number; // magnet: drags the enemy toward you, metres per second
+    mines?: { damage: number; every: number }; // drops a mine every N ticks
+    smoke?: { every: number; dur: number }; // pops a smoke cloud every N ticks
+    barrier?: { hp: number; regen: number }; // regenerating damage sponge
   };
 };
 export type ChipPart = PartBase & { slot: 'chip'; behavior: Behavior };
@@ -210,6 +224,29 @@ export const PARTS: Part[] = [
     accuracy: 1.05,
     sensor: 1275,
   },
+  {
+    id: 'h-visor',
+    slot: 'head',
+    name: 'Visor',
+    blurb: 'Hunter optics. Sharp aim, glass jaw.',
+    weight: 2,
+    drain: 5,
+    hp: 70,
+    accuracy: 1.12,
+    sensor: 1200,
+  },
+  {
+    id: 'h-horn',
+    slot: 'head',
+    name: 'Ram Horn',
+    blurb: 'A big horn. Melee hits harder.',
+    weight: 6,
+    drain: 1,
+    hp: 260,
+    accuracy: 0.94,
+    sensor: 700,
+    melee: 0.2,
+  },
 
   // ── Cores ────────────────────────────────────────────
   {
@@ -276,6 +313,20 @@ export const PARTS: Part[] = [
     armorE: 0.18,
     cooling: 16,
     load: 40,
+  },
+  {
+    id: 'c-reactor',
+    slot: 'core',
+    name: 'Reactor',
+    blurb: 'Open reactor. Huge power, thin armor.',
+    weight: 16,
+    drain: 0,
+    hp: 1020,
+    armorK: 0.1,
+    armorE: 0.12,
+    cooling: 26,
+    load: 18,
+    energy: 22,
   },
 
   // ── Arms ─────────────────────────────────────────────
@@ -400,6 +451,21 @@ export const PARTS: Part[] = [
     mobility: 1.3,
     evasion: 1.22,
   },
+  {
+    id: 'l-spider',
+    slot: 'legs',
+    legType: 'quad',
+    name: 'Spider',
+    blurb: 'Six skittering legs. Quick and sure-footed.',
+    weight: 20,
+    drain: 4,
+    hp: 600,
+    armorK: 0.09,
+    armorE: 0.09,
+    load: 72,
+    mobility: 1.05,
+    evasion: 1.06,
+  },
 
   // ── Boosters ─────────────────────────────────────────
   {
@@ -454,6 +520,19 @@ export const PARTS: Part[] = [
     qbCooldown: 11,
     qbCost: 20,
   },
+  {
+    id: 'b-thruster',
+    slot: 'booster',
+    name: 'Afterburner',
+    blurb: 'Huge dashes, huge appetite.',
+    weight: 8,
+    drain: 3,
+    thrust: 430,
+    boostDrain: 30,
+    qbPower: 400,
+    qbCooldown: 28,
+    qbCost: 48,
+  },
 
   // ── Generators ───────────────────────────────────────
   {
@@ -499,6 +578,17 @@ export const PARTS: Part[] = [
     output: 58,
     capacity: 500,
     cooling: 2,
+  },
+  {
+    id: 'g-fusion',
+    slot: 'generator',
+    name: 'Fusion Cell',
+    blurb: 'The most power in the game. Runs very hot.',
+    weight: 14,
+    drain: 0,
+    output: 90,
+    capacity: 650,
+    cooling: -8,
   },
 
   // ── Right hand weapons ───────────────────────────────
@@ -550,9 +640,9 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'kinetic',
-      damage: 204,
+      damage: 228,
       minRange: 0,
-      maxRange: 289,
+      maxRange: 305,
       cooldown: 19,
       heat: 13,
       energyCost: 0,
@@ -588,7 +678,7 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'energy',
-      damage: 920,
+      damage: 880,
       minRange: 255,
       maxRange: 1615,
       cooldown: 38,
@@ -608,7 +698,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'kinetic',
-      damage: 32,
+      damage: 34,
       minRange: 0,
       maxRange: 442,
       cooldown: 3,
@@ -655,6 +745,126 @@ export const PARTS: Part[] = [
       accuracy: 0.84,
       ammo: null,
       charge: true,
+    }),
+  },
+  {
+    id: 'r-frost',
+    slot: 'weaponR',
+    name: 'Frost Cannon',
+    blurb: 'Cryo shots. Every hit slows them down.',
+    weight: 8,
+    drain: 2,
+    weapon: w({
+      type: 'energy',
+      damage: 125,
+      minRange: 0,
+      maxRange: 700,
+      cooldown: 14,
+      heat: 4,
+      energyCost: 22,
+      accuracy: 0.8,
+      ammo: null,
+      chill: 0.12,
+    }),
+  },
+  {
+    id: 'r-tesla',
+    slot: 'weaponR',
+    name: 'Tesla Arc',
+    blurb: 'Short-range lightning. Drains power, cuts boosts.',
+    weight: 7,
+    drain: 3,
+    weapon: w({
+      type: 'energy',
+      damage: 80,
+      minRange: 0,
+      maxRange: 420,
+      cooldown: 9,
+      heat: 7,
+      energyCost: 18,
+      accuracy: 0.92,
+      ammo: null,
+      shock: 40,
+    }),
+  },
+  {
+    id: 'r-harpoon',
+    slot: 'weaponR',
+    name: 'Harpoon',
+    blurb: 'Hooks them and yanks them in.',
+    weight: 9,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 230,
+      minRange: 100,
+      maxRange: 900,
+      cooldown: 40,
+      heat: 4,
+      energyCost: 0,
+      accuracy: 0.75,
+      ammo: 20,
+      yank: 260,
+    }),
+  },
+  {
+    id: 'r-chainsaw',
+    slot: 'weaponR',
+    name: 'Chainsaw',
+    blurb: 'Grinds non-stop. Chews through shields.',
+    weight: 10,
+    drain: 1,
+    weapon: w({
+      type: 'melee',
+      damage: 62,
+      minRange: 0,
+      maxRange: 110,
+      cooldown: 3,
+      heat: 3,
+      energyCost: 0,
+      accuracy: 0.9,
+      ammo: null,
+      shred: true,
+    }),
+  },
+  {
+    id: 'r-hammer',
+    slot: 'weaponR',
+    name: 'Warhammer',
+    blurb: 'Slow, enormous. Ground slam always staggers.',
+    weight: 15,
+    drain: 0,
+    weapon: w({
+      type: 'melee',
+      damage: 600,
+      minRange: 0,
+      maxRange: 140,
+      cooldown: 50,
+      heat: 12,
+      energyCost: 0,
+      accuracy: 0.8,
+      ammo: null,
+      slam: true,
+    }),
+  },
+  {
+    id: 'r-minigun',
+    slot: 'weaponR',
+    name: 'Minigun',
+    blurb: 'Spins up. The longer it fires, the faster it fires.',
+    weight: 12,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 26,
+      minRange: 0,
+      maxRange: 650,
+      cooldown: 6,
+      heat: 2.5,
+      energyCost: 0,
+      accuracy: 0.55,
+      ammo: 400,
+      spinUp: true,
     }),
   },
 
@@ -772,6 +982,55 @@ export const PARTS: Part[] = [
     drain: 2,
     shield: { block: 0.72, energyPerHit: 6 },
   },
+  {
+    id: 'lw-acid',
+    slot: 'weaponL',
+    name: 'Acid Sprayer',
+    blurb: 'Weak damage, but melts armor for the whole fight.',
+    weight: 5,
+    drain: 1,
+    weapon: w({
+      type: 'kinetic',
+      damage: 30,
+      minRange: 0,
+      maxRange: 300,
+      cooldown: 5,
+      heat: 3,
+      energyCost: 4,
+      accuracy: 0.85,
+      ammo: null,
+      acid: 0.012,
+    }),
+  },
+  {
+    id: 'lw-riot',
+    slot: 'weaponL',
+    name: 'Riot Shield',
+    blurb: 'Blocks less, but bashes back: melee attackers get stunned.',
+    weight: 10,
+    drain: 1,
+    shield: { block: 0.56, energyPerHit: 0, bash: 9 },
+  },
+  {
+    id: 'lw-grenade',
+    slot: 'weaponL',
+    name: 'Grenade Launcher',
+    blurb: 'Bouncing grenades. Even misses hurt.',
+    weight: 7,
+    drain: 0,
+    weapon: w({
+      type: 'explosive',
+      damage: 220,
+      minRange: 150,
+      maxRange: 800,
+      cooldown: 34,
+      heat: 10,
+      energyCost: 0,
+      accuracy: 0.55,
+      ammo: 16,
+      splash: 0.15,
+    }),
+  },
 
   // ── Back units ───────────────────────────────────────
   {
@@ -878,6 +1137,33 @@ export const PARTS: Part[] = [
     drain: 1,
     utility: { cooling: 40, hp: 240 },
   },
+  {
+    id: 'bk-mines',
+    slot: 'back',
+    name: 'Mine Layer',
+    blurb: 'Drops mines as it moves. Chase it at your peril.',
+    weight: 9,
+    drain: 2,
+    utility: { mines: { damage: 260, every: 45 } },
+  },
+  {
+    id: 'bk-smoke',
+    slot: 'back',
+    name: 'Smoke Launcher',
+    blurb: 'Pops smoke now and then. Enemies can barely aim into it.',
+    weight: 5,
+    drain: 2,
+    utility: { smoke: { every: 90, dur: 32 } },
+  },
+  {
+    id: 'bk-barrier',
+    slot: 'back',
+    name: 'Barrier Drone',
+    blurb: 'A shield bubble that soaks hits and slowly recharges.',
+    weight: 8,
+    drain: 6,
+    utility: { barrier: { hp: 250, regen: 22 } },
+  },
 
   // ── Pilot chips ──────────────────────────────────────
   {
@@ -949,6 +1235,24 @@ export const PARTS: Part[] = [
     name: 'Velocity',
     behavior: 'velocity',
     blurb: 'Starts slow, builds momentum. Getting hit bleeds it. At full speed: ram.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-juggernaut',
+    slot: 'chip',
+    name: 'Juggernaut',
+    behavior: 'juggernaut',
+    blurb: 'Can’t be staggered, shoved, pulled or slowed. Walks through everything.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-gambler',
+    slot: 'chip',
+    name: 'Gambler',
+    behavior: 'gambler',
+    blurb: 'Every hit rolls the dice: sometimes double, sometimes half.',
     weight: 0,
     drain: 0,
   },
