@@ -44,8 +44,7 @@ export const SLOT_SHORT: Record<Slot, string> = {
 
 export type DamageType = 'kinetic' | 'energy' | 'explosive' | 'melee';
 export type LegType = 'biped' | 'reverse' | 'quad' | 'tank' | 'hover';
-export type Behavior =
-  'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank';
+export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank';
 
 export type Weapon = {
   type: DamageType;
@@ -850,12 +849,9 @@ export const PARTS: Part[] = [
   },
 ];
 
-export const PART_BY_ID: Record<string, Part> = Object.fromEntries(
-  PARTS.map((p) => [p.id, p])
-);
+export const PART_BY_ID: Record<string, Part> = Object.fromEntries(PARTS.map((p) => [p.id, p]));
 
-export const partsForSlot = (slot: Slot): Part[] =>
-  PARTS.filter((p) => p.slot === slot);
+export const partsForSlot = (slot: Slot): Part[] => PARTS.filter((p) => p.slot === slot);
 
 export const getPart = (id: string): Part => {
   const p = PART_BY_ID[id];

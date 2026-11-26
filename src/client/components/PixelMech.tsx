@@ -11,13 +11,7 @@ type Props = {
 };
 
 /** The mech as a chunky pixel sprite. */
-export const PixelMech = ({
-  build,
-  size = 120,
-  flip = false,
-  bob = false,
-  className = '',
-}: Props) => {
+export const PixelMech = ({ build, size = 120, flip = false, bob = false, className = '' }: Props) => {
   const [url, setUrl] = useState<string | null>(null);
   const w = Math.max(16, Math.round(size / PIXEL));
   const h = Math.round((size * 220) / 200);

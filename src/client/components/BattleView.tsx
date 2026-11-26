@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Arena } from '../../shared/game/arenas';
 import { TICKS_PER_SECOND, type BattleResult } from '../../shared/game/battle';
 import type { Build } from '../../shared/game/mech';
-import {
-  RES_W,
-  SPRITE_W,
-  THEMES,
-  createRenderer,
-  frameAt,
-} from '../lib/arenaRenderer';
+import { RES_W, SPRITE_W, THEMES, createRenderer, frameAt } from '../lib/arenaRenderer';
 import { isMuted, onMuteChange, setMuted, sfx } from '../lib/sfx';
 import { mechSprite } from '../lib/sprite';
 import { PixelMech } from './PixelMech';
@@ -39,14 +33,7 @@ const whiteOf = (src: HTMLCanvasElement) => {
   return c;
 };
 
-export const BattleView = ({
-  result,
-  builds,
-  labels,
-  arena,
-  tags = ['YOU', 'FOE'],
-  onDone,
-}: Props) => {
+export const BattleView = ({ result, builds, labels, arena, tags = ['YOU', 'FOE'], onDone }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [speed, setSpeed] = useState(1);
   const [tick, setTick] = useState(0);
@@ -55,9 +42,7 @@ export const BattleView = ({
   const tickRef = useRef(0);
   const speedRef = useRef(1);
   const tagsRef = useRef(tags);
-  const sprites = useRef<
-    { normal: HTMLCanvasElement; white: HTMLCanvasElement }[]
-  >([]);
+  const sprites = useRef<{ normal: HTMLCanvasElement; white: HTMLCanvasElement }[]>([]);
   useEffect(() => {
     speedRef.current = speed;
     tagsRef.current = tags;
@@ -118,15 +103,11 @@ export const BattleView = ({
       const left = result.ticks - tickRef.current;
       const slow = result.reason === 'ko' && left < 10 ? 0.3 : 1;
       if (playing && tickRef.current < result.ticks) {
-        tickRef.current = Math.min(
-          result.ticks,
-          tickRef.current + dt * TICKS_PER_SECOND * speedRef.current * slow
-        );
+        tickRef.current = Math.min(result.ticks, tickRef.current + dt * TICKS_PER_SECOND * speedRef.current * slow);
         setTick(tickRef.current);
       }
       const busy = renderer.draw(tickRef.current, dt);
-      if (tickRef.current < result.ticks || busy)
-        raf = requestAnimationFrame(loop);
+      if (tickRef.current < result.ticks || busy) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -149,12 +130,8 @@ export const BattleView = ({
             >
               <PixelMech build={builds[i]!} size={44} flip={i === 1} />
               <div className="flex-1 min-w-0">
-                <div className="font-display text-sm leading-none truncate">
-                  {builds[i]!.name}
-                </div>
-                <div className="text-[10px] text-mute truncate">
-                  {labels[i]}
-                </div>
+                <div className="font-display text-sm leading-none truncate">{builds[i]!.name}</div>
+                <div className="text-[10px] text-mute truncate">{labels[i]}</div>
                 <div
                   className="h-3 mt-1 border-2 border-ink bg-white overflow-hidden flex"
                   style={{
@@ -165,12 +142,7 @@ export const BattleView = ({
                     className="h-full"
                     style={{
                       width: `${Math.round(pct * 20) * 5}%`,
-                      background:
-                        pct > 0.5
-                          ? '#7cb518'
-                          : pct > 0.25
-                            ? '#ffc914'
-                            : '#e4572e',
+                      background: pct > 0.5 ? '#7cb518' : pct > 0.25 ? '#ffc914' : '#e4572e',
                     }}
                   />
                 </div>
@@ -180,9 +152,7 @@ export const BattleView = ({
                     justifyContent: i === 1 ? 'flex-end' : 'flex-start',
                   }}
                 >
-                  <span className={m.heat >= 100 ? 'text-rust blink' : ''}>
-                    HEAT {Math.min(999, m.heat)}
-                  </span>
+                  <span className={m.heat >= 100 ? 'text-rust blink' : ''}>HEAT {Math.min(999, m.heat)}</span>
                   <span>EN {m.energy}</span>
                 </div>
               </div>
@@ -191,10 +161,7 @@ export const BattleView = ({
         })}
       </div>
 
-      <div
-        className="relative border-ink overflow-hidden"
-        style={{ borderWidth: 3, borderStyle: 'solid' }}
-      >
+      <div className="relative border-ink overflow-hidden" style={{ borderWidth: 3, borderStyle: 'solid' }}>
         <canvas
           ref={canvasRef}
           className="block w-full"
@@ -203,17 +170,11 @@ export const BattleView = ({
             aspectRatio: `${RES_W} / ${H}`,
           }}
         />
-        <div
-          className="absolute top-1 left-2 font-display text-xs"
-          style={{ color: theme.text }}
-        >
+        <div className="absolute top-1 left-2 font-display text-xs" style={{ color: theme.text }}>
           {arena.name.toUpperCase()} · {secs}s
         </div>
         {intro && (
-          <div
-            key={intro}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          >
+          <div key={intro} className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
               className="font-display text-5xl stamp"
               style={{
@@ -266,11 +227,8 @@ export const BattleView = ({
             {builds[result.winner].name} wins
           </div>
           <div className="text-xs mt-2 text-mute">
-            {result.reason === 'ko'
-              ? 'Knockout'
-              : 'Time ran out — more HP left wins'}{' '}
-            · {Math.round(result.ticks / 10)}s · damage {result.damage[0]} vs{' '}
-            {result.damage[1]}
+            {result.reason === 'ko' ? 'Knockout' : 'Time ran out — more HP left wins'} · {Math.round(result.ticks / 10)}
+            s · damage {result.damage[0]} vs {result.damage[1]}
           </div>
           {onDone && (
             <button className="btn bg-sun mt-3 w-full" onClick={onDone}>

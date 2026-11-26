@@ -1,20 +1,9 @@
 import { context, reddit, redis } from '@devvit/web/server';
 import type { Champion, LastResult, Profile } from '../../shared/api';
 import { arenaForDay, dayKey, getArena } from '../../shared/game/arenas';
-import {
-  FACTIONS,
-  FACTION_IDS,
-  isFactionId,
-  type FactionId,
-} from '../../shared/game/factions';
+import { FACTIONS, FACTION_IDS, isFactionId, type FactionId } from '../../shared/game/factions';
 import { validateBuild, type Build, type Tax } from '../../shared/game/mech';
-import {
-  computeTax,
-  runTournament,
-  winsFor,
-  type Entrant,
-  type TournamentResult,
-} from '../../shared/game/tournament';
+import { computeTax, runTournament, winsFor, type Entrant, type TournamentResult } from '../../shared/game/tournament';
 
 // ── keys ────────────────────────────────────────────────
 const K = {
@@ -74,15 +63,12 @@ export const getTax = async (day: string): Promise<Tax> => {
   const raw = parseJson(await redis.get(K.tax(day)));
   if (typeof raw !== 'object' || raw === null) return {};
   const tax: Tax = {};
-  for (const [k, v] of Object.entries(raw))
-    if (typeof v === 'number') tax[k] = v;
+  for (const [k, v] of Object.entries(raw)) if (typeof v === 'number') tax[k] = v;
   return tax;
 };
 
-export const postDay = async (postId: string): Promise<string | null> =>
-  (await redis.hGet(K.postDay, postId)) ?? null;
-export const dayPost = async (day: string): Promise<string | null> =>
-  (await redis.hGet(K.dayPost, day)) ?? null;
+export const postDay = async (postId: string): Promise<string | null> => (await redis.hGet(K.postDay, postId)) ?? null;
+export const dayPost = async (day: string): Promise<string | null> => (await redis.hGet(K.dayPost, day)) ?? null;
 
 export const createDailyPost = async (day: string, dayNumber: number) => {
   const arena = arenaForDay(day);
@@ -99,9 +85,7 @@ export const createDailyPost = async (day: string, dayNumber: number) => {
 // ── users ───────────────────────────────────────────────
 export const getProfile = async (
   userId: string
-): Promise<
-  Profile & { faction: FactionId | null; lastEntryDay: string | null }
-> => {
+): Promise<Profile & { faction: FactionId | null; lastEntryDay: string | null }> => {
   const h = await redis.hGetAll(K.user(userId));
   const n = (k: string) => Number(h[k] ?? '0');
   const f = h.faction;
@@ -123,11 +107,7 @@ export const saveBuild = async (userId: string, build: Build) => {
   await redis.set(K.build(userId), JSON.stringify(build));
 };
 
-const flair = async (
-  username: string,
-  text: string,
-  faction: FactionId | null
-) => {
+const flair = async (username: string, text: string, faction: FactionId | null) => {
   try {
     const f = faction ? FACTIONS[faction] : null;
     await reddit.setUserFlair({
@@ -146,11 +126,7 @@ const flairText = (faction: FactionId | null, titles: number) => {
   return titles > 0 ? `${name} · 🏆×${titles}` : name;
 };
 
-export const joinFaction = async (
-  userId: string,
-  username: string,
-  faction: FactionId
-) => {
+export const joinFaction = async (userId: string, username: string, faction: FactionId) => {
   const profile = await getProfile(userId);
   if (profile.faction) return profile.faction; // one-time choice
   await redis.hSet(K.user(userId), { faction, username });
@@ -159,10 +135,7 @@ export const joinFaction = async (
 };
 
 // ── entries ─────────────────────────────────────────────
-export const getEntry = async (
-  day: string,
-  userId: string
-): Promise<Build | null> => {
+export const getEntry = async (day: string, userId: string): Promise<Build | null> => {
   const raw = parseJson(await redis.hGet(K.entries(day), userId));
   if (typeof raw !== 'object' || raw === null) return null;
   return validateBuild(Reflect.get(raw, 'build'));
@@ -170,12 +143,7 @@ export const getEntry = async (
 
 export const entryCount = async (day: string) => redis.hLen(K.entries(day));
 
-export const enter = async (
-  day: string,
-  userId: string,
-  username: string,
-  build: Build
-) => {
+export const enter = async (day: string, userId: string, username: string, build: Build) => {
   const profile = await getProfile(userId);
   const already = await redis.hGet(K.entries(day), userId);
   await redis.hSet(K.entries(day), {
@@ -201,8 +169,7 @@ export const enter = async (
       bestStreak: String(Math.max(streak, profile.bestStreak)),
     });
     await redis.hIncrBy(K.user(userId), 'entries', 1);
-    if (profile.faction)
-      await redis.hIncrBy(K.factionDay(day), profile.faction, 1);
+    if (profile.faction) await redis.hIncrBy(K.factionDay(day), profile.faction, 1);
   }
   return { entryCount: await entryCount(day), streak };
 };
@@ -238,24 +205,18 @@ export const getChampions = async (): Promise<Champion[]> => {
   return out;
 };
 
-export const getResults = async (
-  day: string
-): Promise<TournamentResult | null> => {
+export const getResults = async (day: string): Promise<TournamentResult | null> => {
   const raw = parseJson(await redis.get(K.results(day)));
   if (typeof raw !== 'object' || raw === null) return null;
   // Written by us in runRollover; validate builds defensively.
   const entrants: unknown = Reflect.get(raw, 'entrants');
   if (!Array.isArray(entrants)) return null;
-  for (const e of entrants)
-    if (!validateBuild(Reflect.get(e, 'build'))) return null;
+  for (const e of entrants) if (!validateBuild(Reflect.get(e, 'build'))) return null;
   const result: TournamentResult = JSON.parse(JSON.stringify(raw));
   return result;
 };
 
-export const lastResultFor = async (
-  day: string,
-  userId: string | undefined
-): Promise<LastResult | null> => {
+export const lastResultFor = async (day: string, userId: string | undefined): Promise<LastResult | null> => {
   const prev = (() => {
     const d = new Date(`${day}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() - 1);
@@ -293,11 +254,7 @@ export const leaderboard = async () => {
 // ── the daily rollover ──────────────────────────────────
 export const runRollover = async (): Promise<string> => {
   const { day, dayNumber } = await ensureState();
-  const got = await redis.hSetNX(
-    K.locks,
-    `rollover:${day}`,
-    new Date().toISOString()
-  );
+  const got = await redis.hSetNX(K.locks, `rollover:${day}`, new Date().toISOString());
   if (!got) return `rollover for ${day} already done`;
 
   const arena = getArena(arenaForDay(day).id);
@@ -357,10 +314,7 @@ export const runRollover = async (): Promise<string> => {
   // tomorrow
   const tomorrow = nextDay(day);
   const tomorrowNumber = dayNumber + 1;
-  await redis.set(
-    K.tax(tomorrow),
-    JSON.stringify(computeTax(humans.map((h) => h.build)))
-  );
+  await redis.set(K.tax(tomorrow), JSON.stringify(computeTax(humans.map((h) => h.build))));
   await redis.set(K.day, tomorrow);
   await redis.set(K.dayNumber, String(tomorrowNumber));
   await redis.hSet(K.dayNumberOf, { [tomorrow]: String(tomorrowNumber) });
@@ -377,13 +331,8 @@ export const runRollover = async (): Promise<string> => {
   if (oldPost && oldPost.startsWith('t3_')) {
     const final = t.rounds[t.rounds.length - 1]![0]!;
     const loser = t.entrants[final.w === final.a ? final.b : final.a]!;
-    const who = (e: Entrant) =>
-      e.bot
-        ? `**${e.build.name}** (bot)`
-        : `**${e.build.name}** — u/${e.pilot}`;
-    const pts = FACTION_IDS.map(
-      (f) => `${FACTIONS[f].name} +${t.factionPoints[f] ?? 0}`
-    ).join(' · ');
+    const who = (e: Entrant) => (e.bot ? `**${e.build.name}** (bot)` : `**${e.build.name}** — u/${e.pilot}`);
+    const pts = FACTION_IDS.map((f) => `${FACTIONS[f].name} +${t.factionPoints[f] ?? 0}`).join(' · ');
     const text = [
       `## Day ${dayNumber} results — ${arena.name}`,
       ``,

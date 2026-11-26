@@ -10,12 +10,8 @@ export const PIXEL = 2;
 const cache = new Map<string, Promise<HTMLCanvasElement>>();
 
 const svgMarkup = (build: Build): string => {
-  const out = renderToStaticMarkup(
-    createElement(MechArt, { build, size: 200 })
-  );
-  return out.includes('xmlns=')
-    ? out
-    : out.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  const out = renderToStaticMarkup(createElement(MechArt, { build, size: 200 }));
+  return out.includes('xmlns=') ? out : out.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
 };
 
 const rasterize = (markup: string, w: number): Promise<HTMLCanvasElement> =>
@@ -54,10 +50,7 @@ const rasterize = (markup: string, w: number): Promise<HTMLCanvasElement> =>
   });
 
 /** Pixel sprite for a build, `w` art-pixels wide. Cached. */
-export const mechSprite = (
-  build: Build,
-  w: number
-): Promise<HTMLCanvasElement> => {
+export const mechSprite = (build: Build, w: number): Promise<HTMLCanvasElement> => {
   const key = `${w}:${JSON.stringify(build.parts)}:${JSON.stringify(build.paint)}`;
   let p = cache.get(key);
   if (!p) {

@@ -1,11 +1,7 @@
 // Pixel-art renderer for a battle replay. Everything is drawn at a low
 // internal resolution and scaled up with nearest-neighbour by CSS.
 import type { Arena } from '../../shared/game/arenas';
-import {
-  FRAME_EVERY,
-  type BattleResult,
-  type ShotEvent,
-} from '../../shared/game/battle';
+import { FRAME_EVERY, SPECIALS, type BattleResult, type ShotEvent } from '../../shared/game/battle';
 import type { Build } from '../../shared/game/mech';
 import { getPart } from '../../shared/game/parts';
 import { createRng } from '../../shared/game/rng';
@@ -155,21 +151,12 @@ export const frameAt = (r: BattleResult, tick: number): Frame => {
     hp: get(i0, m * 5 + 2),
     heat: get(i0, m * 5 + 3),
     energy: get(i0, m * 5 + 4),
-    moving:
-      Math.abs(get(i1, m * 5) - get(i0, m * 5)) +
-        Math.abs(get(i1, m * 5 + 1) - get(i0, m * 5 + 1)) >
-      0.5,
+    moving: Math.abs(get(i1, m * 5) - get(i0, m * 5)) + Math.abs(get(i1, m * 5 + 1) - get(i0, m * 5 + 1)) > 0.5,
   }));
 };
 
 /** Little pixel props so the arenas don't look empty. Drawn once onto the floor layer. */
-const drawProps = (
-  g: CanvasRenderingContext2D,
-  arena: Arena,
-  w: number,
-  h: number,
-  theme: Theme
-) => {
+const drawProps = (g: CanvasRenderingContext2D, arena: Arena, w: number, h: number, theme: Theme) => {
   const rng = createRng(`props:${arena.id}`);
   const px = (x: number, y: number, ww: number, hh: number, c: string) => {
     g.fillStyle = c;
@@ -183,10 +170,8 @@ const drawProps = (
       if (Math.abs(y - h / 2) > h * 0.22 || rng.chance(0.25)) return { x, y };
     }
   };
-  for (let i = 0; i < 160; i++)
-    px(rng.next() * w, rng.next() * h, 1, 1, theme.speck);
-  for (let i = 0; i < 40; i++)
-    px(rng.next() * w, rng.next() * h, 2, 1, theme.dark);
+  for (let i = 0; i < 160; i++) px(rng.next() * w, rng.next() * h, 1, 1, theme.speck);
+  for (let i = 0; i < 40; i++) px(rng.next() * w, rng.next() * h, 2, 1, theme.dark);
 
   const crate = (x: number, y: number) => {
     px(x, y, 10, 9, '#1b1a17');
@@ -219,13 +204,10 @@ const drawProps = (
         const s = spot();
         const r = rng.int(3);
         if (r === 0) crate(s.x, s.y);
-        else if (r === 1)
-          barrel(s.x, s.y, rng.pick(['#c0392b', '#2f4858', '#d9a441']));
+        else if (r === 1) barrel(s.x, s.y, rng.pick(['#c0392b', '#2f4858', '#d9a441']));
         else tire(s.x, s.y);
       }
-      if (arena.id === 'scrap')
-        for (let i = 0; i < 14; i++)
-          px(rng.next() * w, rng.next() * h, 3, 2, '#4a453d');
+      if (arena.id === 'scrap') for (let i = 0; i < 14; i++) px(rng.next() * w, rng.next() * h, 3, 2, '#4a453d');
       break;
     case 'mud':
       for (let i = 0; i < 10; i++) {
@@ -265,20 +247,11 @@ const drawProps = (
         const r = 4 + rng.int(6);
         g.fillStyle = theme.dark;
         g.beginPath();
-        g.ellipse(
-          Math.round(s.x),
-          Math.round(s.y),
-          r,
-          Math.round(r * 0.6),
-          0,
-          0,
-          Math.PI * 2
-        );
+        g.ellipse(Math.round(s.x), Math.round(s.y), r, Math.round(r * 0.6), 0, 0, Math.PI * 2);
         g.fill();
         px(s.x - r + 1, s.y + Math.round(r * 0.6) - 1, r * 2 - 2, 1, '#4a4d58');
       }
-      for (let i = 0; i < 30; i++)
-        px(rng.next() * w, rng.next() * h, 1, 1, '#6b6f7c');
+      for (let i = 0; i < 30; i++) px(rng.next() * w, rng.next() * h, 1, 1, '#6b6f7c');
       break;
     case 'alley':
       for (let x = 0; x < w; x += 8) {
@@ -352,9 +325,7 @@ export const createRenderer = (
     for (let i = 0; i < r * 5; i++) {
       const ox = Math.round((rng.next() - 0.5) * r * 2);
       const oy = Math.round((rng.next() - 0.5) * r * 1.2);
-      fg.fillStyle = rng.chance(0.5)
-        ? 'rgba(27,26,23,0.35)'
-        : 'rgba(27,26,23,0.18)';
+      fg.fillStyle = rng.chance(0.5) ? 'rgba(27,26,23,0.35)' : 'rgba(27,26,23,0.18)';
       fg.fillRect(Math.round(x) + ox, Math.round(y) + oy + 6, 1, 1);
     }
   };
@@ -397,19 +368,16 @@ export const createRenderer = (
   let flash = 0;
   const debrisDone = new Set<number>();
   let sepOffset = 0;
+  let nextSpecial = 0;
+  const trail: { x: number; y: number }[][] = [[], []];
   let lastT = 0;
   const legTypes = builds.map((b) => {
     const p = getPart(b.parts.legs);
     return p.slot === 'legs' ? p.legType : 'biped';
   });
 
-  const fxOf = (ev: ShotEvent): Fx =>
-    FX_BY_PART[builds[ev.by].parts[ev.slot]] ?? FALLBACK[ev.type];
-  const gun = (
-    p: { x: number; y: number },
-    o: { x: number; y: number },
-    slot: ShotEvent['slot']
-  ) => {
+  const fxOf = (ev: ShotEvent): Fx => FX_BY_PART[builds[ev.by].parts[ev.slot]] ?? FALLBACK[ev.type];
+  const gun = (p: { x: number; y: number }, o: { x: number; y: number }, slot: ShotEvent['slot']) => {
     const dir = o.x < p.x ? -1 : 1;
     if (slot === 'back') return { x: p.x - dir * 6, y: p.y - SPRITE_H * 0.32 };
     const front = slot === 'weaponR' ? 1 : -1; // which hand faces the camera side
@@ -421,14 +389,7 @@ export const createRenderer = (
     return { x: to.x + side * 14, y: to.y + side * 9 };
   };
 
-  const line = (
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-    color: string,
-    width = 1
-  ) => {
+  const line = (x0: number, y0: number, x1: number, y1: number, color: string, width = 1) => {
     // Bresenham-ish pixel line so beams stay crisp
     const dx = x1 - x0;
     const dy = y1 - y0;
@@ -450,20 +411,11 @@ export const createRenderer = (
     {
       const rawDx = pos[1]!.x - pos[0]!.x;
       const gap = SPRITE_W * 0.7;
-      const target =
-        Math.abs(rawDx) < gap
-          ? ((rawDx >= 0 ? 1 : -1) * (gap - Math.abs(rawDx))) / 2
-          : 0;
+      const target = Math.abs(rawDx) < gap ? ((rawDx >= 0 ? 1 : -1) * (gap - Math.abs(rawDx))) / 2 : 0;
       const step = 90 * dt * Math.max(1, getSpeed());
       sepOffset += Math.max(-step, Math.min(step, target - sepOffset));
-      pos[0]!.x = Math.max(
-        SPRITE_W / 2,
-        Math.min(W - SPRITE_W / 2, pos[0]!.x - sepOffset)
-      );
-      pos[1]!.x = Math.max(
-        SPRITE_W / 2,
-        Math.min(W - SPRITE_W / 2, pos[1]!.x + sepOffset)
-      );
+      pos[0]!.x = Math.max(SPRITE_W / 2, Math.min(W - SPRITE_W / 2, pos[0]!.x - sepOffset));
+      pos[1]!.x = Math.max(SPRITE_W / 2, Math.min(W - SPRITE_W / 2, pos[1]!.x + sepOffset));
     }
     const hopAt = (i: number, tt: number) => {
       // reverse-joint legs move in visible hops: a little parabola every 0.45s
@@ -473,11 +425,27 @@ export const createRenderer = (
     };
     const quiet = getSpeed() > 2;
 
+    // ── chip specials ──
+    while (nextSpecial < result.specials.length && result.specials[nextSpecial]!.t <= t) {
+      const sp = result.specials[nextSpecial++]!;
+      if (t - sp.t > 20) continue;
+      const p = pos[sp.by]!;
+      sfx.special();
+      const cols =
+        sp.kind === 'turtle' || sp.kind === 'flank'
+          ? ['#ffffff', '#3cf0ec']
+          : sp.kind === 'kite'
+            ? ['#f4f0e6', '#c9c4b8']
+            : ['#ffffff', '#ffd23f', '#e4572e'];
+      spawn(p.x, p.y, 18, cols, 45, 0.5, 2);
+      if (sp.kind === 'kite') spawn(p.x, p.y, 30, ['#f4f0e6', '#d6d1c4', '#a9a497'], 22, 2.2, 4, 0, 0, 1, 3);
+      shake = Math.max(shake, 2);
+    }
+    const specialActive = (i: number) =>
+      result.specials.find((sp) => sp.by === i && t >= sp.t && t < Math.max(sp.until, sp.t + 1)) ?? null;
+
     // ── weapons fired ──
-    while (
-      nextEvent < result.events.length &&
-      result.events[nextEvent]!.t <= t
-    ) {
+    while (nextEvent < result.events.length && result.events[nextEvent]!.t <= t) {
       const idx = nextEvent++;
       const ev = result.events[idx]!;
       if (t - ev.t > 20) {
@@ -489,12 +457,12 @@ export const createRenderer = (
       const fx = fxOf(ev);
       const m = gun(me, foe, ev.slot);
       if (!quiet || ev.dmg > 140) sfx.shoot(ev.type, ev.by);
-      const mc =
-        ev.type === 'energy'
-          ? '#bffcfb'
-          : ev.type === 'explosive'
-            ? '#ffb36b'
-            : '#fff3b0';
+      if (ev.crit) {
+        sfx.crit();
+        flash = Math.max(flash, 0.1);
+        shake = Math.max(shake, 5);
+      }
+      const mc = ev.type === 'energy' ? '#bffcfb' : ev.type === 'explosive' ? '#ffb36b' : '#fff3b0';
       muzzle[ev.by] = {
         until: t + 0.8,
         color: mc,
@@ -502,18 +470,7 @@ export const createRenderer = (
       };
       if (fx === 'tracer' || fx === 'bullet' || fx === 'pellets') {
         // ejected shell casing
-        spawn(
-          me.x,
-          me.y,
-          1,
-          ['#d9a441', '#8a6a2a'],
-          18,
-          0.5,
-          1,
-          foe.x < me.x ? 0.8 : -0.8,
-          -0.6,
-          0.3
-        );
+        spawn(me.x, me.y, 1, ['#d9a441', '#8a6a2a'], 18, 0.5, 1, foe.x < me.x ? 0.8 : -0.8, -0.6, 0.3);
       }
       if (fx === 'flame') {
         const dx = foe.x - m.x;
@@ -533,8 +490,7 @@ export const createRenderer = (
           1.5
         );
       }
-      if (fx === 'missiles' || fx === 'shell')
-        spawn(m.x, m.y, 5, ['#d8d2c4', '#8a8478'], 12, 0.6, 2);
+      if (fx === 'missiles' || fx === 'shell') spawn(m.x, m.y, 5, ['#d8d2c4', '#8a8478'], 12, 0.6, 2);
       if (fx === 'rail') shake = Math.max(shake, 2);
     }
 
@@ -575,32 +531,8 @@ export const createRenderer = (
       } else sfx.hit(big);
       switch (fx) {
         case 'missiles':
-          spawn(
-            at.x,
-            at.y,
-            14,
-            ['#ffffff', '#ffd23f', '#ff7a2f', '#c0392b', '#5b5148'],
-            34,
-            0.55,
-            2,
-            0,
-            -0.2,
-            1,
-            1
-          );
-          spawn(
-            at.x,
-            at.y,
-            6,
-            ['#6e675c', '#3d3a34'],
-            10,
-            1.1,
-            2,
-            0,
-            -0.4,
-            0.6,
-            1.5
-          );
+          spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ff7a2f', '#c0392b', '#5b5148'], 34, 0.55, 2, 0, -0.2, 1, 1);
+          spawn(at.x, at.y, 6, ['#6e675c', '#3d3a34'], 10, 1.1, 2, 0, -0.4, 0.6, 1.5);
           scorch(at.x, at.y, 4);
           shake = Math.max(shake, 2);
           break;
@@ -618,89 +550,30 @@ export const createRenderer = (
             1,
             1.5
           );
-          spawn(
-            at.x,
-            at.y,
-            14,
-            ['#6e675c', '#3d3a34'],
-            14,
-            1.6,
-            3,
-            0,
-            -0.5,
-            0.6,
-            2
-          );
+          spawn(at.x, at.y, 14, ['#6e675c', '#3d3a34'], 14, 1.6, 3, 0, -0.5, 0.6, 2);
           scorch(at.x, at.y, 9);
           shake = 6;
           flash = 0.12;
           break;
         case 'rail':
-          spawn(
-            at.x,
-            at.y,
-            22,
-            ['#ffffff', '#bffcfb', '#3cf0ec', '#127475'],
-            55,
-            0.6,
-            1
-          );
+          spawn(at.x, at.y, 22, ['#ffffff', '#bffcfb', '#3cf0ec', '#127475'], 55, 0.6, 1);
           shake = Math.max(shake, 4);
           break;
         case 'spike':
         case 'slash':
-          spawn(
-            at.x,
-            at.y,
-            16,
-            ['#ffffff', '#ffd23f', '#ff7a2f'],
-            50,
-            0.35,
-            1,
-            foe.x > me.x ? 0.7 : -0.7,
-            -0.2,
-            0.7
-          );
+          spawn(at.x, at.y, 16, ['#ffffff', '#ffd23f', '#ff7a2f'], 50, 0.35, 1, foe.x > me.x ? 0.7 : -0.7, -0.2, 0.7);
           shake = Math.max(shake, big ? 4 : 2);
           break;
         case 'flame':
-          spawn(
-            at.x,
-            at.y,
-            3,
-            ['#ffd23f', '#ff7a2f', '#5b5148'],
-            14,
-            0.5,
-            2,
-            0,
-            -0.6,
-            0.5,
-            1
-          );
+          spawn(at.x, at.y, 3, ['#ffd23f', '#ff7a2f', '#5b5148'], 14, 0.5, 2, 0, -0.6, 0.5, 1);
           break;
         case 'beam':
         case 'pulse':
         case 'drone':
-          spawn(
-            at.x,
-            at.y,
-            big ? 10 : 5,
-            ['#ffffff', '#3cf0ec', '#127475'],
-            30,
-            0.35,
-            1
-          );
+          spawn(at.x, at.y, big ? 10 : 5, ['#ffffff', '#3cf0ec', '#127475'], 30, 0.35, 1);
           break;
         default:
-          spawn(
-            at.x,
-            at.y,
-            big ? 10 : 4,
-            ['#ffffff', '#ffd23f', '#ff7a2f'],
-            32,
-            0.3,
-            1
-          );
+          spawn(at.x, at.y, big ? 10 : 4, ['#ffffff', '#ffd23f', '#ff7a2f'], 32, 0.3, 1);
       }
       if (big) shake = Math.max(shake, 3);
     }
@@ -714,19 +587,7 @@ export const createRenderer = (
       const p = pos[i]!;
       // steam when hot, dust when walking
       if (m.heat > 85 && rng.chance(0.35))
-        spawn(
-          p.x + (rng.next() - 0.5) * 10,
-          p.y - SPRITE_H * 0.3,
-          1,
-          ['#f4f0e6', '#c9c4b8'],
-          8,
-          0.9,
-          2,
-          0,
-          -1,
-          0.3,
-          1
-        );
+        spawn(p.x + (rng.next() - 0.5) * 10, p.y - SPRITE_H * 0.3, 1, ['#f4f0e6', '#c9c4b8'], 8, 0.9, 2, 0, -1, 0.3, 1);
       if (m.moving && rng.chance(0.3))
         spawn(
           p.x + (rng.next() - 0.5) * 8,
@@ -763,50 +624,17 @@ export const createRenderer = (
           1,
           2
         );
-        spawn(
-          loser.x,
-          loser.y,
-          22,
-          ['#1b1a17', '#4a453d'],
-          40,
-          1.8,
-          2,
-          0,
-          -0.3,
-          1,
-          1
-        );
-        spawn(
-          loser.x,
-          loser.y,
-          16,
-          ['#6e675c', '#3d3a34', '#2a2823'],
-          10,
-          2.4,
-          3,
-          0,
-          -0.6,
-          0.5,
-          2.5
-        );
+        spawn(loser.x, loser.y, 22, ['#1b1a17', '#4a453d'], 40, 1.8, 2, 0, -0.3, 1, 1);
+        spawn(loser.x, loser.y, 16, ['#6e675c', '#3d3a34', '#2a2823'], 10, 2.4, 3, 0, -0.6, 0.5, 2.5);
         scorch(loser.x, loser.y, 12);
       }
-      setTimeout(
-        () =>
-          result.winner === 0 || getTags()[0] !== 'YOU'
-            ? sfx.win()
-            : sfx.lose(),
-        650
-      );
+      setTimeout(() => (result.winner === 0 || getTags()[0] !== 'YOU' ? sfx.win() : sfx.lose()), 650);
     }
 
     // ── draw ──
     g.save();
     if (shake > 0.2) {
-      g.translate(
-        Math.round((rng.next() - 0.5) * shake * 2),
-        Math.round((rng.next() - 0.5) * shake * 2)
-      );
+      g.translate(Math.round((rng.next() - 0.5) * shake * 2), Math.round((rng.next() - 0.5) * shake * 2));
       shake *= Math.pow(0.02, dt);
     }
     g.drawImage(floor, 0, 0);
@@ -821,12 +649,7 @@ export const createRenderer = (
         if (ht > t) {
           const k = 1 - (ht - t) / 10;
           g.fillStyle = 'rgba(27,26,23,0.3)';
-          g.fillRect(
-            Math.round(x - 2 - k * 3),
-            Math.round(y),
-            Math.round(4 + k * 6),
-            2
-          );
+          g.fillRect(Math.round(x - 2 - k * 3), Math.round(y), Math.round(4 + k * 6), 2);
           g.fillStyle = '#4a453d';
           g.fillRect(Math.round(x - 2), Math.round(y - (ht - t) * 12), 4, 4);
         } else if (!debrisDone.has(ht)) {
@@ -846,8 +669,7 @@ export const createRenderer = (
       const hop = hopAt(i, t);
       let bobY = 0;
       if (leg === 'reverse') bobY = -Math.round(hop);
-      else if (leg === 'hover')
-        bobY = Math.floor(t / 3 + i) % 2 === 0 ? -2 : -1;
+      else if (leg === 'hover') bobY = Math.floor(t / 3 + i) % 2 === 0 ? -2 : -1;
       else if (m.moving) bobY = Math.floor(t / 1.5) % 2 === 0 ? -1 : 0;
       const x = Math.round(p.x);
       const y = Math.round(p.y);
@@ -856,54 +678,44 @@ export const createRenderer = (
       g.fillRect(x - shadowW / 2, y + SPRITE_H / 2 - 3, shadowW, 3);
       g.fillRect(x - shadowW / 2 + 3, y + SPRITE_H / 2 - 4, shadowW - 6, 1);
       if (leg === 'hover') {
-        g.fillStyle =
-          Math.floor(t * 3) % 2 === 0
-            ? 'rgba(60,240,236,0.5)'
-            : 'rgba(60,240,236,0.25)';
+        g.fillStyle = Math.floor(t * 3) % 2 === 0 ? 'rgba(60,240,236,0.5)' : 'rgba(60,240,236,0.25)';
         g.fillRect(x - 8, y + SPRITE_H / 2 - 5, 16, 1);
       }
       // landing puff at the end of each hop
-      if (
-        leg === 'reverse' &&
-        m.moving &&
-        hop < 1.2 &&
-        hopAt(i, lastT) >= 1.2
-      ) {
-        spawn(
-          x - 5,
-          y + SPRITE_H / 2 - 2,
-          2,
-          [theme.speck, theme.dark],
-          10,
-          0.4,
-          2,
-          -0.5,
-          -0.2,
-          0.4
-        );
-        spawn(
-          x + 5,
-          y + SPRITE_H / 2 - 2,
-          2,
-          [theme.speck, theme.dark],
-          10,
-          0.4,
-          2,
-          0.5,
-          -0.2,
-          0.4
-        );
+      if (leg === 'reverse' && m.moving && hop < 1.2 && hopAt(i, lastT) >= 1.2) {
+        spawn(x - 5, y + SPRITE_H / 2 - 2, 2, [theme.speck, theme.dark], 10, 0.4, 2, -0.5, -0.2, 0.4);
+        spawn(x + 5, y + SPRITE_H / 2 - 2, 2, [theme.speck, theme.dark], 10, 0.4, 2, 0.5, -0.2, 0.4);
       }
       const sp = sprites.current[i];
+      const act = specialActive(i);
+      // afterimages while dashing
+      if (act && (act.kind === 'rush' || act.kind === 'flank')) {
+        const tr = trail[i]!;
+        tr.unshift({ x, y: y + bobY });
+        if (tr.length > 6) tr.pop();
+        if (sp) {
+          tr.forEach((pt, k) => {
+            if (k % 2 === 1) return;
+            g.save();
+            g.globalAlpha = 0.35 - k * 0.05;
+            g.translate(pt.x, pt.y);
+            if (other.x < p.x) g.scale(-1, 1);
+            g.drawImage(sp.white, -SPRITE_W / 2, -SPRITE_H / 2);
+            g.restore();
+          });
+        }
+      } else trail[i] = [];
+      if (act && act.kind === 'berserk' && Math.floor(t * 3) % 2 === 0) {
+        g.fillStyle = 'rgba(228,87,46,0.35)';
+        g.fillRect(x - SPRITE_W / 2 - 2, y - SPRITE_H / 2 - 2, SPRITE_W + 4, SPRITE_H + 4);
+      }
       g.save();
       g.translate(x, y + bobY);
       if (other.x < p.x) g.scale(-1, 1);
       if (m.hp <= 0) g.globalAlpha = 0.35;
       if (sp)
         g.drawImage(
-          t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0
-            ? sp.white
-            : sp.normal,
+          t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0 ? sp.white : sp.normal,
           -SPRITE_W / 2,
           -SPRITE_H / 2
         );
@@ -913,13 +725,39 @@ export const createRenderer = (
       }
       g.restore();
 
+      if (act && act.kind === 'turtle') {
+        g.strokeStyle = Math.floor(t * 4) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
+        g.lineWidth = 1;
+        g.strokeRect(x - SPRITE_W / 2 - 3.5, y - SPRITE_H / 2 - 3.5, SPRITE_W + 7, SPRITE_H + 7);
+      }
+      if (act && act.kind === 'kite' && rng.chance(0.5)) {
+        spawn(
+          x + (rng.next() - 0.5) * 30,
+          y + (rng.next() - 0.5) * 20,
+          1,
+          ['#f4f0e6', '#c9c4b8'],
+          6,
+          1.4,
+          4,
+          0,
+          -0.3,
+          0.5,
+          2
+        );
+      }
+      // sniper: laser sight until the charged shot goes off
+      const charge = result.specials.find((s2) => s2.by === i && s2.kind === 'sniper' && t >= s2.t);
+      if (charge) {
+        const critEv = result.events.find((e) => e.by === i && e.crit && e.t >= charge.t);
+        if (critEv && t < critEv.t)
+          line(x, y - 4, other.x, other.y - 2, Math.floor(t * 4) % 2 === 0 ? '#e4572e' : '#ff9b7a');
+      }
       if (t < shieldUntil[i]!) {
         g.strokeStyle = Math.floor(t * 6) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
         g.lineWidth = 1;
         const dir = other.x < p.x ? -1 : 1;
         const sx = x + dir * 16;
-        for (let k = -10; k <= 10; k += 2)
-          g.strokeRect(sx + (Math.abs(k) > 6 ? -dir : 0), y + k, 1, 1);
+        for (let k = -10; k <= 10; k += 2) g.strokeRect(sx + (Math.abs(k) > 6 ? -dir : 0), y + k, 1, 1);
       }
 
       // name plate
@@ -981,12 +819,7 @@ export const createRenderer = (
             const p = at(age / flight);
             const off = k * 3 * (age / flight + 0.2);
             g.fillStyle = k === 0 ? '#ffffff' : '#ffd23f';
-            g.fillRect(
-              Math.round(p.x - uy * off),
-              Math.round(p.y + ux * off),
-              2,
-              2
-            );
+            g.fillRect(Math.round(p.x - uy * off), Math.round(p.y + ux * off), 2, 2);
           }
           break;
         }
@@ -995,10 +828,7 @@ export const createRenderer = (
           const dur = fx === 'beam' ? 2.2 : 1.4;
           if (age > dur) break;
           const fade = 1 - age / dur;
-          const src =
-            fx === 'drone'
-              ? { x: me.x + (foe.x < me.x ? 8 : -8), y: me.y - SPRITE_H * 0.55 }
-              : from;
+          const src = fx === 'drone' ? { x: me.x + (foe.x < me.x ? 8 : -8), y: me.y - SPRITE_H * 0.55 } : from;
           if (fx === 'drone') {
             g.fillStyle = '#1b1a17';
             g.fillRect(Math.round(src.x) - 2, Math.round(src.y) - 2, 5, 5);
@@ -1008,8 +838,7 @@ export const createRenderer = (
           g.globalAlpha = fade;
           if (fx === 'beam') line(src.x, src.y, to.x, to.y, '#127475', 3);
           line(src.x, src.y, to.x, to.y, '#3cf0ec', fx === 'beam' ? 2 : 1);
-          if (Math.floor(age * 8) % 2 === 0)
-            line(src.x, src.y, to.x, to.y, '#ffffff', 1);
+          if (Math.floor(age * 8) % 2 === 0) line(src.x, src.y, to.x, to.y, '#ffffff', 1);
           g.globalAlpha = 1;
           break;
         }
@@ -1026,18 +855,8 @@ export const createRenderer = (
             const p = at(s);
             const r = Math.round(2 + age * 2);
             g.fillStyle = '#bffcfb';
-            g.fillRect(
-              Math.round(p.x - uy * r),
-              Math.round(p.y + ux * r),
-              1,
-              1
-            );
-            g.fillRect(
-              Math.round(p.x + uy * r),
-              Math.round(p.y - ux * r),
-              1,
-              1
-            );
+            g.fillRect(Math.round(p.x - uy * r), Math.round(p.y + ux * r), 1, 1);
+            g.fillRect(Math.round(p.x + uy * r), Math.round(p.y - ux * r), 1, 1);
           }
           g.globalAlpha = 1;
           break;
@@ -1059,45 +878,19 @@ export const createRenderer = (
             const prog = Math.min(1, (age - k * 0.4) / flight);
             if (prog < 0) continue;
             const base = at(prog);
-            const arcH =
-              fx === 'shell' ? Math.min(60, dist * 0.45) : (k - 1) * 14 + 10;
+            const arcH = fx === 'shell' ? Math.min(60, dist * 0.45) : (k - 1) * 14 + 10;
             const lift = 4 * prog * (1 - prog) * arcH;
             const x = base.x + (fx === 'missiles' ? -uy * lift * 0.6 : 0);
             const y = fx === 'shell' ? base.y - lift : base.y + ux * lift * 0.6;
             if (rng.chance(0.7))
-              spawn(
-                x,
-                y,
-                1,
-                ['#ffd23f', '#d8d2c4', '#8a8478'],
-                4,
-                fx === 'shell' ? 0.8 : 0.6,
-                2,
-                0,
-                0,
-                1,
-                1
-              );
+              spawn(x, y, 1, ['#ffd23f', '#d8d2c4', '#8a8478'], 4, fx === 'shell' ? 0.8 : 0.6, 2, 0, 0, 1, 1);
             g.fillStyle = '#1b1a17';
-            g.fillRect(
-              Math.round(x) - 2,
-              Math.round(y) - 2,
-              fx === 'shell' ? 5 : 4,
-              fx === 'shell' ? 5 : 3
-            );
+            g.fillRect(Math.round(x) - 2, Math.round(y) - 2, fx === 'shell' ? 5 : 4, fx === 'shell' ? 5 : 3);
             g.fillStyle = fx === 'shell' ? '#5b6b4e' : '#e8e2d4';
-            g.fillRect(
-              Math.round(x) - 1,
-              Math.round(y) - 1,
-              fx === 'shell' ? 3 : 2,
-              fx === 'shell' ? 3 : 1
-            );
+            g.fillRect(Math.round(x) - 1, Math.round(y) - 1, fx === 'shell' ? 3 : 2, fx === 'shell' ? 3 : 1);
             if (fx === 'shell' && prog > 0.6) {
               // landing marker
-              g.fillStyle =
-                Math.floor(t * 6) % 2 === 0
-                  ? 'rgba(228,87,46,0.8)'
-                  : 'rgba(228,87,46,0.3)';
+              g.fillStyle = Math.floor(t * 6) % 2 === 0 ? 'rgba(228,87,46,0.8)' : 'rgba(228,87,46,0.3)';
               g.fillRect(Math.round(to.x) - 4, Math.round(to.y) + 6, 9, 1);
             }
           }
@@ -1107,22 +900,8 @@ export const createRenderer = (
           if (age > 1.6) break;
           const reach = Math.min(1, age * 3);
           g.globalAlpha = 1 - age / 1.6;
-          line(
-            from.x,
-            from.y,
-            from.x + (to.x - from.x) * reach,
-            from.y + (to.y - from.y) * reach,
-            '#1b1a17',
-            3
-          );
-          line(
-            from.x,
-            from.y,
-            from.x + (to.x - from.x) * reach,
-            from.y + (to.y - from.y) * reach,
-            '#e8e2d4',
-            1
-          );
+          line(from.x, from.y, from.x + (to.x - from.x) * reach, from.y + (to.y - from.y) * reach, '#1b1a17', 3);
+          line(from.x, from.y, from.x + (to.x - from.x) * reach, from.y + (to.y - from.y) * reach, '#e8e2d4', 1);
           g.globalAlpha = 1;
           break;
         }
@@ -1177,12 +956,7 @@ export const createRenderer = (
       const ci = Math.min(p.colors.length - 1, Math.floor(k * p.colors.length));
       const size = Math.max(1, Math.round(p.size + (p.grow ?? 0) * k));
       g.fillStyle = p.colors[ci]!;
-      g.fillRect(
-        Math.round(p.x - size / 2),
-        Math.round(p.y - size / 2),
-        size,
-        size
-      );
+      g.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);
     }
 
     // damage numbers (show when the hit lands)
@@ -1199,12 +973,7 @@ export const createRenderer = (
       const land = ev.t + flightOf(fx, Math.hypot(to.x - me.x, to.y - me.y));
       const a = (t - land) / 8;
       if (a < 0 || a > 1) continue;
-      const jx =
-        (((ev.t * 7 +
-          (ev.slot === 'back' ? 3 : ev.slot === 'weaponL' ? 1 : 0)) %
-          5) -
-          2) *
-        8;
+      const jx = (((ev.t * 7 + (ev.slot === 'back' ? 3 : ev.slot === 'weaponL' ? 1 : 0)) % 5) - 2) * 8;
       const yy = Math.round(to.y - SPRITE_H / 2 - 22 - a * 12);
       const txt = `${ev.dmg}`;
       g.fillStyle = '#1b1a17';
@@ -1216,13 +985,38 @@ export const createRenderer = (
         [1, 1],
       ] as const)
         g.fillText(txt, Math.round(to.x + jx) + ox, yy + oy);
-      g.fillStyle = ev.blocked
-        ? '#3cf0ec'
-        : ev.dmg > 140
-          ? '#ffc914'
-          : '#ffffff';
-      if (a < 0.7 || Math.floor(t * 4) % 2 === 0)
-        g.fillText(txt, Math.round(to.x + jx), yy);
+      g.fillStyle = ev.blocked ? '#3cf0ec' : ev.dmg > 140 ? '#ffc914' : '#ffffff';
+      if (a < 0.7 || Math.floor(t * 4) % 2 === 0) g.fillText(txt, Math.round(to.x + jx), yy);
+    }
+
+    // special-move banners
+    g.font = '8px Silkscreen, monospace';
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    for (const sp of result.specials) {
+      const age = t - sp.t;
+      if (age < 0 || age > 14) continue;
+      const p = pos[sp.by]!;
+      const label = `${SPECIALS[sp.kind].name.toUpperCase()}!`;
+      const yy = Math.round(p.y - SPRITE_H / 2 - 34 - Math.min(age, 4));
+      const w2 = Math.ceil(g.measureText(label).width) + 6;
+      if (age < 10 || Math.floor(t * 4) % 2 === 0) {
+        g.fillStyle = '#1b1a17';
+        g.fillRect(Math.round(p.x - w2 / 2) - 1, yy - 2, w2 + 2, 12);
+        g.fillStyle =
+          sp.kind === 'turtle' || sp.kind === 'flank' ? '#3cf0ec' : sp.kind === 'kite' ? '#f4f0e6' : '#ffc914';
+        g.fillRect(Math.round(p.x - w2 / 2), yy - 1, w2, 10);
+        g.fillStyle = '#1b1a17';
+        g.fillText(label, Math.round(p.x), yy);
+      }
+    }
+    for (const ev of result.events) {
+      if (!ev.crit) continue;
+      const age = t - ev.t;
+      if (age < 0 || age > 10) continue;
+      const p = pos[1 - ev.by]!;
+      g.fillStyle = Math.floor(t * 6) % 2 === 0 ? '#e4572e' : '#ffc914';
+      g.fillText('CRIT!', Math.round(p.x), Math.round(p.y - SPRITE_H / 2 - 46));
     }
 
     if (arena.fog) {
@@ -1238,8 +1032,7 @@ export const createRenderer = (
       g.fillStyle = 'rgba(255,170,90,0.06)';
       g.fillRect(0, Math.round((t * 2) % H), W, 2);
     }
-    if (arena.id === 'storm' && Math.floor(t) % 53 < 1 && t > 1)
-      flash = Math.max(flash, 0.06);
+    if (arena.id === 'storm' && Math.floor(t) % 53 < 1 && t > 1) flash = Math.max(flash, 0.06);
     if (flash > 0) {
       g.fillStyle = `rgba(255,255,255,${Math.min(0.7, flash * 4)})`;
       g.fillRect(0, 0, W, H);

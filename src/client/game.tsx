@@ -1,21 +1,10 @@
 import './fonts';
 import './index.css';
 
-import {
-  StrictMode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { context, navigateTo, showToast } from '@devvit/web/client';
-import type {
-  InitResponse,
-  LeaderboardResponse,
-  ResultsResponse,
-} from '../shared/api';
+import type { InitResponse, LeaderboardResponse, ResultsResponse } from '../shared/api';
 import { getArena, type Arena } from '../shared/game/arenas';
 import { simulateBattle, type BattleResult } from '../shared/game/battle';
 import { botsForDay } from '../shared/game/bots';
@@ -37,8 +26,7 @@ type Fight = {
   arena: Arena;
   key: string;
 };
-type Screen =
-  'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions';
+type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions';
 
 const postUrl = (postId: string) =>
   `https://www.reddit.com/r/${context.subredditName}/comments/${postId.replace(/^t3_/, '')}`;
@@ -83,9 +71,7 @@ const SoundCheck = () => {
 const Header = ({ data }: { data: InitResponse }) => (
   <div className="flex items-end justify-between gap-2">
     <div>
-      <div className="font-display font-black text-3xl leading-[0.85] tracking-tight">
-        MECH DAILY
-      </div>
+      <div className="font-display font-black text-3xl leading-[0.85] tracking-tight">MECH DAILY</div>
       <div className="text-[11px] text-mute mt-1">
         Day {data.dayNumber} · {data.entryCount} pilot
         {data.entryCount === 1 ? '' : 's'} entered
@@ -93,10 +79,7 @@ const Header = ({ data }: { data: InitResponse }) => (
     </div>
     <div className="flex items-center gap-2">
       {data.faction && (
-        <span
-          className="tag py-0.5"
-          style={{ background: FACTIONS[data.faction].color }}
-        >
+        <span className="tag py-0.5" style={{ background: FACTIONS[data.faction].color }}>
           {FACTIONS[data.faction].name}
         </span>
       )}
@@ -107,20 +90,12 @@ const Header = ({ data }: { data: InitResponse }) => (
 
 const FactionPicker = ({ onPick }: { onPick: (f: FactionId) => void }) => (
   <div className="fixed inset-0 z-20 grid-paper flex flex-col justify-center p-4 gap-3">
-    <div className="font-display font-black text-3xl leading-none">
-      Pick a side
-    </div>
-    <div className="text-sm">
-      Every match your faction wins adds to its score. You can't switch later.
-    </div>
+    <div className="font-display font-black text-3xl leading-none">Pick a side</div>
+    <div className="text-sm">Every match your faction wins adds to its score. You can't switch later.</div>
     {FACTION_IDS.map((id) => {
       const f = FACTIONS[id];
       return (
-        <button
-          key={id}
-          className="sticker p-3 text-left flex items-center gap-3"
-          onClick={() => onPick(id)}
-        >
+        <button key={id} className="sticker p-3 text-left flex items-center gap-3" onClick={() => onPick(id)}>
           <div
             className="w-10 h-10 rounded-md border-3"
             style={{
@@ -130,9 +105,7 @@ const FactionPicker = ({ onPick }: { onPick: (f: FactionId) => void }) => (
             }}
           />
           <div>
-            <div className="font-display font-black text-xl leading-none">
-              {f.name}
-            </div>
+            <div className="font-display font-black text-xl leading-none">{f.name}</div>
             <div className="text-xs">{f.motto}</div>
           </div>
         </button>
@@ -183,18 +156,13 @@ export const App = () => {
         setData(d);
         setBuild(d.myEntry ?? d.myBuild ?? DEFAULT_BUILD);
       })
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : 'Could not load')
-      );
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not load'));
   }, []);
 
   // every button clicks, unless it makes its own sound
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      const el =
-        e.target instanceof Element
-          ? e.target.closest('button, summary')
-          : null;
+      const el = e.target instanceof Element ? e.target.closest('button, summary') : null;
       if (el && !el.closest('[data-quiet]')) sfx.click();
     };
     document.addEventListener('click', onClick, true);
@@ -207,16 +175,11 @@ export const App = () => {
     return () => clearInterval(id);
   }, [load]);
 
-  const arena = useMemo(
-    () => getArena(data?.arenaId ?? 'yard'),
-    [data?.arenaId]
-  );
+  const arena = useMemo(() => getArena(data?.arenaId ?? 'yard'), [data?.arenaId]);
   const tax: Tax = data?.tax ?? {};
   const isOldPost = data ? data.postDay !== data.day : false;
 
-  const entered = data?.myEntry
-    ? JSON.stringify(data.myEntry) === JSON.stringify(build)
-    : false;
+  const entered = data?.myEntry ? JSON.stringify(data.myEntry) === JSON.stringify(build) : false;
 
   const leaveGarage = async () => {
     setScreen('home');
@@ -238,11 +201,7 @@ export const App = () => {
         entryCount: r.entryCount,
         profile: { ...data.profile, streak: r.streak },
       });
-      showToast(
-        data.myEntry
-          ? 'Entry updated'
-          : `Entered! Streak: ${r.streak} day${r.streak === 1 ? '' : 's'}`
-      );
+      showToast(data.myEntry ? 'Entry updated' : `Entered! Streak: ${r.streak} day${r.streak === 1 ? '' : 's'}`);
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not enter');
     } finally {
@@ -263,12 +222,7 @@ export const App = () => {
   const practice = (opp: Build, label: string) => {
     fightCount.current += 1;
     const seed = `practice:${data?.day ?? ''}:${fightCount.current}:${opp.name}:${build.name}`;
-    const result = simulateBattle(
-      { build, tax },
-      { build: opp, tax },
-      arena,
-      seed
-    );
+    const result = simulateBattle({ build, tax }, { build: opp, tax }, arena, seed);
     setFight({
       result,
       builds: [build, opp],
@@ -336,18 +290,10 @@ export const App = () => {
             <Header data={data} />
 
             {isOldPost && (
-              <div
-                className="sticker p-3 bg-sun flex flex-col gap-2"
-                style={{ background: '#ffe08a' }}
-              >
-                <div className="text-sm">
-                  This is Day {data.postDayNumber}'s post. Its bracket is done.
-                </div>
+              <div className="sticker p-3 bg-sun flex flex-col gap-2" style={{ background: '#ffe08a' }}>
+                <div className="text-sm">This is Day {data.postDayNumber}'s post. Its bracket is done.</div>
                 <div className="flex gap-2">
-                  <button
-                    className="btn bg-card flex-1 text-sm"
-                    onClick={() => void openBracket(data.postDay)}
-                  >
+                  <button className="btn bg-card flex-1 text-sm" onClick={() => void openBracket(data.postDay)}>
                     See that bracket
                   </button>
                   {data.todayPostId && (
@@ -364,22 +310,14 @@ export const App = () => {
 
             <div className="sticker p-3">
               <div className="flex items-baseline justify-between">
-                <div className="text-[11px] font-semibold text-mute">
-                  TODAY'S ARENA
-                </div>
-                <div className="text-[11px]">
-                  bracket in {countdown(data.nextRolloverIso)}
-                </div>
+                <div className="text-[11px] font-semibold text-mute">TODAY'S ARENA</div>
+                <div className="text-[11px]">bracket in {countdown(data.nextRolloverIso)}</div>
               </div>
-              <div className="font-display font-black text-2xl leading-none mt-1">
-                {arena.name}
-              </div>
+              <div className="font-display font-black text-2xl leading-none mt-1">{arena.name}</div>
               <div className="text-sm mt-1">{arena.blurb}</div>
               {Object.keys(tax).length > 0 && (
                 <div className="mt-2">
-                  <div className="text-[11px] font-semibold text-mute mb-1">
-                    TOO POPULAR YESTERDAY — HEAVIER TODAY
-                  </div>
+                  <div className="text-[11px] font-semibold text-mute mb-1">TOO POPULAR YESTERDAY — HEAVIER TODAY</div>
                   <div className="flex flex-wrap gap-1">
                     {Object.entries(tax)
                       .sort((a, b) => b[1] - a[1])
@@ -398,24 +336,15 @@ export const App = () => {
               <PixelMech build={build} size={110} bob />
               <div className="flex-1 min-w-0 flex flex-col gap-2">
                 <div>
-                  <div className="font-display font-black text-xl leading-none truncate">
-                    {build.name}
-                  </div>
+                  <div className="font-display font-black text-xl leading-none truncate">{build.name}</div>
                   <div className="text-[11px] text-mute">
-                    {getPart(build.parts.chip).name} pilot ·{' '}
-                    {getPart(build.parts.legs).name} legs
+                    {getPart(build.parts.chip).name} pilot · {getPart(build.parts.legs).name} legs
                   </div>
                 </div>
-                <button
-                  className="btn bg-card text-sm"
-                  onClick={() => setScreen('garage')}
-                >
+                <button className="btn bg-card text-sm" onClick={() => setScreen('garage')}>
                   Garage
                 </button>
-                <button
-                  className="btn bg-teal text-sm"
-                  onClick={() => setScreen('practice')}
-                >
+                <button className="btn bg-teal text-sm" onClick={() => setScreen('practice')}>
                   Practice fight
                 </button>
               </div>
@@ -438,24 +367,17 @@ export const App = () => {
             )}
             {data.profile.streak > 0 && !isOldPost && (
               <div className="text-xs text-center -mt-1">
-                🔥 {data.profile.streak}-day streak · {data.profile.wins} match
-                wins total
+                🔥 {data.profile.streak}-day streak · {data.profile.wins} match wins total
                 {data.profile.titles > 0 ? ` · 🏆×${data.profile.titles}` : ''}
               </div>
             )}
 
             {data.last && (
               <div className="sticker p-3">
-                <div className="text-[11px] font-semibold text-mute">
-                  DAY {data.last.dayNumber} RESULT
-                </div>
-                <div className="font-display font-black text-xl leading-none mt-1">
-                  🏆 {data.last.championName}
-                </div>
+                <div className="text-[11px] font-semibold text-mute">DAY {data.last.dayNumber} RESULT</div>
+                <div className="font-display font-black text-xl leading-none mt-1">🏆 {data.last.championName}</div>
                 <div className="text-xs">
-                  {data.last.championPilot
-                    ? `piloted by u/${data.last.championPilot}`
-                    : 'a house bot took it'}
+                  {data.last.championPilot ? `piloted by u/${data.last.championPilot}` : 'a house bot took it'}
                 </div>
                 {data.last.mine && (
                   <div className="text-sm mt-2">
@@ -464,19 +386,13 @@ export const App = () => {
                       : `You won ${data.last.mine.wins} match${data.last.mine.wins === 1 ? '' : 'es'} out of ${data.last.mine.rounds} rounds.`}
                   </div>
                 )}
-                <button
-                  className="btn bg-card text-sm w-full mt-2"
-                  onClick={() => void openBracket(data.last!.day)}
-                >
+                <button className="btn bg-card text-sm w-full mt-2" onClick={() => void openBracket(data.last!.day)}>
                   Watch the bracket
                 </button>
               </div>
             )}
 
-            <button
-              className="sticker p-3 text-left"
-              onClick={() => void openFactions()}
-            >
+            <button className="sticker p-3 text-left" onClick={() => void openFactions()}>
               <div className="flex justify-between text-[11px] font-semibold text-mute mb-2">
                 <span>FACTION WAR</span>
                 <span>leaderboard →</span>
@@ -485,27 +401,13 @@ export const App = () => {
             </button>
 
             <details className="sticker p-3 text-xs">
-              <summary className="font-display font-black text-lg cursor-pointer">
-                How it works
-              </summary>
+              <summary className="font-display font-black text-lg cursor-pointer">How it works</summary>
               <ol className="list-decimal pl-4 mt-2 flex flex-col gap-1">
-                <li>
-                  Build a mech in the garage. 10 slots, every part has a
-                  trade-off.
-                </li>
-                <li>
-                  Check today's arena. Fog, mud, heat… the best build changes
-                  daily.
-                </li>
+                <li>Build a mech in the garage. 10 slots, every part has a trade-off.</li>
+                <li>Check today's arena. Fog, mud, heat… the best build changes daily.</li>
                 <li>Practice against sparring bots and past champions.</li>
-                <li>
-                  Enter. At 00:00 UTC every entry fights in an automatic
-                  bracket.
-                </li>
-                <li>
-                  Parts that were too popular get heavier the next day. Don't
-                  copy the meta.
-                </li>
+                <li>Enter. At 00:00 UTC every entry fights in an automatic bracket.</li>
+                <li>Parts that were too popular get heavier the next day. Don't copy the meta.</li>
               </ol>
             </details>
 
@@ -514,32 +416,19 @@ export const App = () => {
         )}
 
         {screen === 'garage' && (
-          <Garage
-            build={build}
-            arena={arena}
-            tax={tax}
-            onChange={setBuild}
-            onBack={() => void leaveGarage()}
-          />
+          <Garage build={build} arena={arena} tax={tax} onChange={setBuild} onBack={() => void leaveGarage()} />
         )}
 
         {screen === 'practice' && (
           <>
             <div className="flex items-center gap-2">
-              <button
-                className="btn bg-card text-sm"
-                onClick={() => setScreen('home')}
-              >
+              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
                 ← Back
               </button>
               <div className="font-display font-black text-2xl">Practice</div>
             </div>
-            <div className="text-xs">
-              Fights happen in today's arena: {arena.name}. Nothing here counts.
-            </div>
-            <div className="text-[11px] font-semibold text-mute">
-              SPARRING BOTS
-            </div>
+            <div className="text-xs">Fights happen in today's arena: {arena.name}. Nothing here counts.</div>
+            <div className="text-[11px] font-semibold text-mute">SPARRING BOTS</div>
             {sparring.map((b, i) => (
               <button
                 key={i}
@@ -548,22 +437,16 @@ export const App = () => {
               >
                 <PixelMech build={b} size={56} />
                 <div className="flex-1">
-                  <div className="font-display font-black text-lg leading-none">
-                    {b.name}
-                  </div>
+                  <div className="font-display font-black text-lg leading-none">{b.name}</div>
                   <div className="text-[11px] text-mute">
-                    {getPart(b.parts.chip).name} ·{' '}
-                    {getPart(b.parts.weaponR).name} +{' '}
-                    {getPart(b.parts.back).name}
+                    {getPart(b.parts.chip).name} · {getPart(b.parts.weaponR).name} + {getPart(b.parts.back).name}
                   </div>
                 </div>
                 <span className="font-display font-black">FIGHT →</span>
               </button>
             ))}
             {data.champions.length > 0 && (
-              <div className="text-[11px] font-semibold text-mute mt-2">
-                PAST CHAMPIONS
-              </div>
+              <div className="text-[11px] font-semibold text-mute mt-2">PAST CHAMPIONS</div>
             )}
             {data.champions.slice(0, 5).map((c) => (
               <button
@@ -573,9 +456,7 @@ export const App = () => {
               >
                 <PixelMech build={c.build} size={56} />
                 <div className="flex-1">
-                  <div className="font-display font-black text-lg leading-none">
-                    🏆 {c.name}
-                  </div>
+                  <div className="font-display font-black text-lg leading-none">🏆 {c.name}</div>
                   <div className="text-[11px] text-mute">
                     Day {c.dayNumber} · {c.pilot ? `u/${c.pilot}` : 'house bot'}
                   </div>
@@ -594,19 +475,14 @@ export const App = () => {
             labels={fight.labels}
             tags={fight.tags}
             arena={fight.arena}
-            onDone={() =>
-              setScreen(fight.tags[0] === 'YOU' ? 'practice' : 'bracket')
-            }
+            onDone={() => setScreen(fight.tags[0] === 'YOU' ? 'practice' : 'bracket')}
           />
         )}
 
         {screen === 'bracket' && (
           <>
             <div className="flex items-center gap-2">
-              <button
-                className="btn bg-card text-sm"
-                onClick={() => setScreen('home')}
-              >
+              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
                 ← Back
               </button>
               <div className="font-display font-black text-2xl">
@@ -614,12 +490,7 @@ export const App = () => {
               </div>
             </div>
             {results && (
-              <Bracket
-                res={results}
-                username={data.username}
-                onWatch={setFight}
-                onShow={() => setScreen('battle')}
-              />
+              <Bracket res={results} username={data.username} onWatch={setFight} onShow={() => setScreen('battle')} />
             )}
           </>
         )}
@@ -627,44 +498,26 @@ export const App = () => {
         {screen === 'factions' && (
           <>
             <div className="flex items-center gap-2">
-              <button
-                className="btn bg-card text-sm"
-                onClick={() => setScreen('home')}
-              >
+              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
                 ← Back
               </button>
-              <div className="font-display font-black text-2xl">
-                Faction war
-              </div>
+              <div className="font-display font-black text-2xl">Faction war</div>
             </div>
             <div className="sticker p-3">
-              <div className="text-[11px] font-semibold text-mute mb-2">
-                ALL-TIME POINTS
-              </div>
+              <div className="text-[11px] font-semibold text-mute mb-2">ALL-TIME POINTS</div>
               <FactionBars totals={data.factionTotals} />
-              <div className="text-[11px] text-mute mt-2">
-                +1 for entering, +2 per match won, +5 for the champion.
-              </div>
+              <div className="text-[11px] text-mute mt-2">+1 for entering, +2 per match won, +5 for the champion.</div>
             </div>
             <div className="sticker p-3">
-              <div className="text-[11px] font-semibold text-mute mb-2">
-                ENTERED TODAY
-              </div>
+              <div className="text-[11px] font-semibold text-mute mb-2">ENTERED TODAY</div>
               <FactionBars totals={data.factionToday} />
             </div>
             <div className="sticker p-3">
-              <div className="text-[11px] font-semibold text-mute mb-2">
-                TOP PILOTS (MATCH WINS)
-              </div>
+              <div className="text-[11px] font-semibold text-mute mb-2">TOP PILOTS (MATCH WINS)</div>
               {!board && <div className="text-xs">Loading…</div>}
-              {board && board.pilots.length === 0 && (
-                <div className="text-xs">No winners yet. Be the first.</div>
-              )}
+              {board && board.pilots.length === 0 && <div className="text-xs">No winners yet. Be the first.</div>}
               {board?.pilots.map((p, i) => (
-                <div
-                  key={p.username}
-                  className="flex justify-between text-sm py-0.5"
-                >
+                <div key={p.username} className="flex justify-between text-sm py-0.5">
                   <span>
                     {i + 1}. u/{p.username}
                   </span>
@@ -680,13 +533,7 @@ export const App = () => {
 };
 
 const ROUND_NAME = (fromEnd: number, total: number) =>
-  fromEnd === 0
-    ? 'Final'
-    : fromEnd === 1
-      ? 'Semifinals'
-      : fromEnd === 2
-        ? 'Quarterfinals'
-        : `Round ${total - fromEnd}`;
+  fromEnd === 0 ? 'Final' : fromEnd === 1 ? 'Semifinals' : fromEnd === 2 ? 'Quarterfinals' : `Round ${total - fromEnd}`;
 
 const Bracket = ({
   res,
@@ -710,12 +557,7 @@ const Bracket = ({
   const watch = (a: number, b: number, seed: string) => {
     const ea = t.entrants[a]!;
     const eb = t.entrants[b]!;
-    const result = simulateBattle(
-      { build: ea.build, tax: t.tax },
-      { build: eb.build, tax: t.tax },
-      arena,
-      seed
-    );
+    const result = simulateBattle({ build: ea.build, tax: t.tax }, { build: eb.build, tax: t.tax }, arena, seed);
     onWatch({
       result,
       builds: [ea.build, eb.build],
@@ -733,12 +575,8 @@ const Bracket = ({
       <div className="sticker p-3 flex gap-3 items-center">
         <PixelMech build={champ.build} size={90} />
         <div>
-          <div className="text-[11px] font-semibold text-mute">
-            CHAMPION · {arena.name.toUpperCase()}
-          </div>
-          <div className="font-display font-black text-2xl leading-none">
-            🏆 {champ.build.name}
-          </div>
+          <div className="text-[11px] font-semibold text-mute">CHAMPION · {arena.name.toUpperCase()}</div>
+          <div className="font-display font-black text-2xl leading-none">🏆 {champ.build.name}</div>
           <div className="text-xs">{label(t.champion)}</div>
           <div className="text-[11px] text-mute mt-1">
             {humans} pilots + {t.entrants.length - humans} bots
@@ -752,9 +590,7 @@ const Bracket = ({
       )}
       {t.rounds.map((round, ri) => {
         const fromEnd = t.rounds.length - 1 - ri;
-        const shown = round.filter(
-          (m) => fromEnd <= 2 || m.a === me || m.b === me
-        );
+        const shown = round.filter((m) => fromEnd <= 2 || m.a === me || m.b === me);
         if (shown.length === 0) return null;
         return (
           <div key={ri} className="flex flex-col gap-1.5">
@@ -770,9 +606,7 @@ const Bracket = ({
                   style={mine ? { background: '#ffe08a' } : undefined}
                   onClick={() => watch(m.a, m.b, m.seed)}
                 >
-                  <span
-                    className={`flex-1 truncate ${m.w === m.a ? 'font-semibold' : 'text-mute line-through'}`}
-                  >
+                  <span className={`flex-1 truncate ${m.w === m.a ? 'font-semibold' : 'text-mute line-through'}`}>
                     {t.entrants[m.a]!.build.name}
                   </span>
                   <span className="text-[10px]">vs</span>

@@ -1,10 +1,5 @@
 import type { ReactNode } from 'react';
-import {
-  BODY_COLORS,
-  DECALS,
-  TRIM_COLORS,
-  type Build,
-} from '../../shared/game/mech';
+import { BODY_COLORS, DECALS, TRIM_COLORS, type Build } from '../../shared/game/mech';
 
 // Chunky "sticker" style: flat fills, thick ink outlines, no gradients.
 const INK = '#1b1a17';
@@ -40,28 +35,16 @@ const LEGS: Record<string, (c: Ctx) => ReactNode> = {
   ),
   'l-hopper': (c) => (
     <g {...s}>
-      <path
-        d="M74 140 L62 168 L82 196 L74 208 L96 208 L96 196 L80 168 L90 140 Z"
-        fill={c.body}
-      />
-      <path
-        d="M126 140 L138 168 L118 196 L126 208 L104 208 L104 196 L120 168 L110 140 Z"
-        fill={c.body}
-      />
+      <path d="M74 140 L62 168 L82 196 L74 208 L96 208 L96 196 L80 168 L90 140 Z" fill={c.body} />
+      <path d="M126 140 L138 168 L118 196 L126 208 L104 208 L104 196 L120 168 L110 140 Z" fill={c.body} />
       <circle cx={66} cy={168} r={6} fill={c.trim} />
       <circle cx={134} cy={168} r={6} fill={c.trim} />
     </g>
   ),
   'l-crab': (c) => (
     <g {...s}>
-      <path
-        d="M70 146 L36 170 L30 208 L44 208 L48 178 L76 160 Z"
-        fill={c.dark}
-      />
-      <path
-        d="M130 146 L164 170 L170 208 L156 208 L152 178 L124 160 Z"
-        fill={c.dark}
-      />
+      <path d="M70 146 L36 170 L30 208 L44 208 L48 178 L76 160 Z" fill={c.dark} />
+      <path d="M130 146 L164 170 L170 208 L156 208 L152 178 L124 160 Z" fill={c.dark} />
       <path d="M80 150 L68 208 L84 208 L92 156 Z" fill={c.body} />
       <path d="M120 150 L132 208 L116 208 L108 156 Z" fill={c.body} />
       <rect x={66} y={136} width={68} height={18} rx={6} fill={c.trim} />
@@ -80,33 +63,20 @@ const LEGS: Record<string, (c: Ctx) => ReactNode> = {
     <g {...s}>
       <path d="M78 140 L122 140 L146 180 L54 180 Z" fill={c.body} />
       <rect x={50} y={178} width={100} height={12} rx={6} fill={c.trim} />
-      <path
-        d="M62 198 L138 198 M72 206 L128 206"
-        stroke={c.trim}
-        strokeWidth={4}
-        opacity={0.8}
-      />
+      <path d="M62 198 L138 198 M72 206 L128 206" stroke={c.trim} strokeWidth={4} opacity={0.8} />
     </g>
   ),
 };
 
 const CORES: Record<string, (c: Ctx) => ReactNode> = {
-  'c-shell': (c) => (
-    <rect x={72} y={86} width={56} height={56} rx={14} fill={c.body} {...s} />
-  ),
+  'c-shell': (c) => <rect x={72} y={86} width={56} height={56} rx={14} fill={c.body} {...s} />,
   'c-vault': (c) => (
     <g {...s}>
       <rect x={62} y={80} width={76} height={66} rx={6} fill={c.body} />
       <rect x={70} y={88} width={60} height={50} rx={3} fill="none" />
     </g>
   ),
-  'c-prism': (c) => (
-    <path
-      d="M100 78 L134 96 L134 130 L100 148 L66 130 L66 96 Z"
-      fill={c.body}
-      {...s}
-    />
-  ),
+  'c-prism': (c) => <path d="M100 78 L134 96 L134 130 L100 148 L66 130 L66 96 Z" fill={c.body} {...s} />,
   'c-radiator': (c) => (
     <g {...s}>
       <rect x={68} y={84} width={64} height={60} rx={8} fill={c.body} />
@@ -153,10 +123,7 @@ const HEADS: Record<string, (c: Ctx) => ReactNode> = {
   ),
   'h-crown': (c) => (
     <g {...s}>
-      <path
-        d="M82 60 L88 48 L94 58 L100 46 L106 58 L112 48 L118 60 L118 84 L82 84 Z"
-        fill={c.body}
-      />
+      <path d="M82 60 L88 48 L94 58 L100 46 L106 58 L112 48 L118 60 L118 84 L82 84 Z" fill={c.body} />
       <rect x={88} y={66} width={24} height={7} rx={3} fill={c.trim} />
     </g>
   ),
@@ -176,14 +143,7 @@ const arm = (id: string, side: -1 | 1, c: Ctx) => {
     <g {...s}>
       <rect x={x} y={90} width={a.w} height={44} rx={a.w / 2} fill={c.body} />
       {a.joint && <circle cx={x + a.w / 2} cy={112} r={8} fill={c.trim} />}
-      <rect
-        x={x - 2}
-        y={128}
-        width={a.w + 4}
-        height={12}
-        rx={4}
-        fill={c.dark}
-      />
+      <rect x={x - 2} y={128} width={a.w + 4} height={12} rx={4} fill={c.dark} />
     </g>
   );
 };
@@ -237,15 +197,7 @@ const HAND_WEAPONS: Record<string, (x: number, c: Ctx) => ReactNode> = {
   'lw-saber': (x, c) => (
     <g {...s}>
       <rect x={x - 4} y={130} width={8} height={14} rx={2} fill={c.dark} />
-      <rect
-        x={x - 3}
-        y={144}
-        width={6}
-        height={50}
-        rx={3}
-        fill={c.trim}
-        stroke={INK}
-      />
+      <rect x={x - 3} y={144} width={6} height={50} rx={3} fill={c.trim} stroke={INK} />
     </g>
   ),
   'lw-flamer': (x, c) => (
@@ -289,15 +241,7 @@ const BACKS: Record<string, (c: Ctx) => ReactNode> = {
   ),
   'bk-howitzer': (c) => (
     <g {...s}>
-      <rect
-        x={118}
-        y={38}
-        width={16}
-        height={52}
-        rx={3}
-        fill={c.dark}
-        transform="rotate(18 126 64)"
-      />
+      <rect x={118} y={38} width={16} height={52} rx={3} fill={c.dark} transform="rotate(18 126 64)" />
       <rect x={116} y={76} width={22} height={14} rx={3} fill={c.trim} />
     </g>
   ),
@@ -307,9 +251,7 @@ const BACKS: Record<string, (c: Ctx) => ReactNode> = {
       <circle cx={146} cy={46} r={4} fill={c.trim} />
     </g>
   ),
-  'bk-plate': (c) => (
-    <rect x={60} y={70} width={80} height={20} rx={4} fill={c.dark} {...s} />
-  ),
+  'bk-plate': (c) => <rect x={60} y={70} width={80} height={20} rx={4} fill={c.dark} {...s} />,
   'bk-dish': (c) => (
     <g {...s}>
       <line x1={128} y1={82} x2={136} y2={56} />
@@ -359,10 +301,7 @@ const decal = (id: number, c: Ctx): ReactNode => {
     case 'number':
       return (
         <g fill={c.trim} {...g}>
-          <path
-            d="M86 102 H98 V124 H86 Z M90 106 V120 H94 V106 Z"
-            fillRule="evenodd"
-          />
+          <path d="M86 102 H98 V124 H86 Z M90 106 V120 H94 V106 Z" fillRule="evenodd" />
           <path d="M102 102 H114 V108 L108 124 H103 L109 107 H102 Z" />
         </g>
       );
@@ -381,13 +320,7 @@ const decal = (id: number, c: Ctx): ReactNode => {
         </g>
       );
     case 'bolt':
-      return (
-        <path
-          d="M103 96 L92 114 L100 114 L96 130 L110 108 L102 108 Z"
-          fill="#ffd23f"
-          {...g}
-        />
-      );
+      return <path d="M103 96 L92 114 L100 114 L96 130 L110 108 L102 108 Z" fill="#ffd23f" {...g} />;
     default:
       return null;
   }
@@ -400,12 +333,7 @@ type Props = {
   className?: string;
 };
 
-export const MechArt = ({
-  build,
-  size = 200,
-  flip = false,
-  className,
-}: Props) => {
+export const MechArt = ({ build, size = 200, flip = false, className }: Props) => {
   const body = BODY_COLORS[build.paint.body] ?? BODY_COLORS[0]!;
   const trim = TRIM_COLORS[build.paint.trim] ?? TRIM_COLORS[0]!;
   const c: Ctx = { body, trim, dark: shade(body, 0.62) };

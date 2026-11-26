@@ -38,19 +38,9 @@ const b: Build = {
   paint: { body: 3, trim: 0, decal: 7 },
 };
 const arena = getArena(q.get('arena') ?? 'yard');
-const result = simulateBattle(
-  { build: a },
-  { build: b },
-  arena,
-  q.get('seed') ?? 's1'
-);
+const result = simulateBattle({ build: a }, { build: b }, arena, q.get('seed') ?? 's1');
 createRoot(document.getElementById('root')!).render(
   <div className="grid-paper min-h-screen p-3">
-    <BattleView
-      result={result}
-      builds={[a, b]}
-      labels={['test', 'test']}
-      arena={arena}
-    />
+    <BattleView result={result} builds={[a, b]} labels={['test', 'test']} arena={arena} />
   </div>
 );

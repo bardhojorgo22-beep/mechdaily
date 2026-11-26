@@ -42,5 +42,4 @@ export const createRng = (seed: number | string): Rng => {
   };
 };
 
-export const clamp = (v: number, lo: number, hi: number) =>
-  v < lo ? lo : v > hi ? hi : v;
+export const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);

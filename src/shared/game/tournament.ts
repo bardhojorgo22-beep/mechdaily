@@ -32,25 +32,18 @@ export const MAX_BRACKET = 256;
 export const POINTS = { enter: 1, win: 2, champion: 5 } as const;
 
 /** Single elimination. Empty seats are filled with bots so there's always a bracket. */
-export const runTournament = (
-  day: string,
-  arena: Arena,
-  tax: Tax,
-  humans: Entrant[]
-): TournamentResult => {
+export const runTournament = (day: string, arena: Arena, tax: Tax, humans: Entrant[]): TournamentResult => {
   const rng = createRng(`bracket:${day}`);
   const capped = humans.slice(0, MAX_BRACKET);
   let size = MIN_BRACKET;
   while (size < capped.length) size *= 2;
-  const bots: Entrant[] = botsForDay(day, size - capped.length).map(
-    (build, i) => ({
-      id: `bot:${i}`,
-      pilot: '',
-      faction: null,
-      build,
-      bot: true,
-    })
-  );
+  const bots: Entrant[] = botsForDay(day, size - capped.length).map((build, i) => ({
+    id: `bot:${i}`,
+    pilot: '',
+    faction: null,
+    build,
+    bot: true,
+  }));
   const entrants = [...capped, ...bots];
   // seeded shuffle of seats
   const seats = entrants.map((_, i) => i);
@@ -69,12 +62,7 @@ export const runTournament = (
       const a = alive[i]!;
       const b = alive[i + 1]!;
       const seed = `${day}:r${r}:m${i / 2}`;
-      const res = simulateBattle(
-        { build: entrants[a]!.build, tax },
-        { build: entrants[b]!.build, tax },
-        arena,
-        seed
-      );
+      const res = simulateBattle({ build: entrants[a]!.build, tax }, { build: entrants[b]!.build, tax }, arena, seed);
       const w = res.winner === 0 ? a : b;
       round.push({ a, b, w, seed });
       next.push(w);
@@ -91,8 +79,7 @@ export const runTournament = (
     factionPoints[e.faction] = (factionPoints[e.faction] ?? 0) + pts;
   };
   for (const e of capped) add(e, POINTS.enter);
-  for (const round of rounds)
-    for (const m of round) add(entrants[m.w], POINTS.win);
+  for (const round of rounds) for (const m of round) add(entrants[m.w], POINTS.win);
   add(entrants[champion], POINTS.champion);
 
   return {
@@ -121,8 +108,7 @@ export const computeTax = (builds: Build[]): Tax => {
     const options = partsForSlot(slot);
     const fair = 1 / options.length;
     for (const part of options) {
-      const share =
-        builds.filter((b) => b.parts[slot] === part.id).length / builds.length;
+      const share = builds.filter((b) => b.parts[slot] === part.id).length / builds.length;
       const t = clamp((share - fair) / (1 - fair), 0, 1);
       if (t > 0.02) tax[part.id] = Math.round(t * 100) / 100;
     }

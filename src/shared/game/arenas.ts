@@ -108,9 +108,7 @@ export const ARENAS: Arena[] = [
   },
 ];
 
-export const ARENA_BY_ID: Record<string, Arena> = Object.fromEntries(
-  ARENAS.map((a) => [a.id, a])
-);
+export const ARENA_BY_ID: Record<string, Arena> = Object.fromEntries(ARENAS.map((a) => [a.id, a]));
 
 export const getArena = (id: string): Arena => ARENA_BY_ID[id] ?? ARENAS[0]!;
 
@@ -146,7 +144,6 @@ export const arenaForDay = (day: string): Arena => {
   const pos = ((n % len) + len) % len;
   const order = cycleOrder(cycle);
   const prevLast = cycleOrder(cycle - 1)[len - 1]!;
-  if (order[0]!.id === prevLast.id)
-    [order[0], order[1]] = [order[1]!, order[0]!];
+  if (order[0]!.id === prevLast.id) [order[0], order[1]] = [order[1]!, order[0]!];
   return order[pos]!;
 };

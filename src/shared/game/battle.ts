@@ -1,11 +1,5 @@
 import type { Arena } from './arenas';
-import {
-  computeStats,
-  type Build,
-  type MechStats,
-  type MountedWeapon,
-  type Tax,
-} from './mech';
+import { computeStats, type Build, type MechStats, type MountedWeapon, type Tax } from './mech';
 import { clamp, createRng } from './rng';
 
 export const TICKS_PER_SECOND = 10;
@@ -23,6 +17,42 @@ export type ShotEvent = {
   hit: boolean;
   dmg: number;
   blocked: boolean;
+  crit?: boolean; // charged sniper shot
+};
+
+/** Once-per-fight pilot chip special moves. */
+export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: string }> = {
+  rush: {
+    name: 'Overdrive',
+    blurb: 'Opens with a 3s burst of extra speed to close the gap.',
+  },
+  kite: {
+    name: 'Smoke Screen',
+    blurb: 'When cornered: 4s of smoke, much harder to hit.',
+  },
+  turtle: {
+    name: 'Fortress',
+    blurb: 'Below 60% HP: locks down for 5s and takes half damage.',
+  },
+  sniper: {
+    name: 'Charged Shot',
+    blurb: 'Once planted: next long-range shot hits for triple and rarely misses.',
+  },
+  berserk: {
+    name: 'Rage',
+    blurb: 'Below 40% HP: 5s of +50% damage and double fire rate.',
+  },
+  flank: {
+    name: 'Afterburner',
+    blurb: 'Below 75% HP: 2.5s sprint around the enemy, very hard to hit.',
+  },
+};
+
+export type SpecialEvent = {
+  t: number;
+  by: 0 | 1;
+  kind: MechStats['behavior'];
+  until: number;
 };
 
 export type BattleResult = {
@@ -35,6 +65,7 @@ export type BattleResult = {
   events: ShotEvent[];
   damage: [number, number];
   hazardHits: number[]; // ticks where scrap fell
+  specials: SpecialEvent[];
 };
 
 type MechState = {
@@ -51,14 +82,13 @@ type MechState = {
   ammo: (number | null)[];
   strafeSign: number;
   dealt: number;
+  specialUsed: boolean;
+  specialUntil: number;
+  charged: boolean; // sniper: next long-range shot is charged
+  dmgMult: number;
 };
 
-const newState = (
-  s: MechStats,
-  x: number,
-  y: number,
-  seedOffset: number
-): MechState => ({
+const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechState => ({
   s,
   x,
   y,
@@ -73,6 +103,10 @@ const newState = (
   ammo: s.weapons.map((wp) => wp.ammo),
   strafeSign: seedOffset % 2 === 0 ? 1 : -1,
   dealt: 0,
+  specialUsed: false,
+  specialUntil: 0,
+  charged: false,
+  dmgMult: 1,
 });
 
 const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
@@ -81,18 +115,14 @@ const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
 const usable = (m: MechState, i: number) => {
   const wp = m.s.weapons[i]!;
   const ammo = m.ammo[i];
-  return (
-    (ammo === null || (ammo !== undefined && ammo > 0)) &&
-    (wp.energyCost === 0 || m.s.energyCap >= wp.energyCost)
-  );
+  return (ammo === null || (ammo !== undefined && ammo > 0)) && (wp.energyCost === 0 || m.s.energyCap >= wp.energyCost);
 };
 
 /** The distance this pilot wants to fight at. */
 const desiredRange = (m: MechState, arena: Arena): number => {
   const ranges: { min: number; max: number }[] = [];
   m.s.weapons.forEach((wp, i) => {
-    if (usable(m, i))
-      ranges.push({ min: wp.minRange, max: reach(m, wp, arena) });
+    if (usable(m, i)) ranges.push({ min: wp.minRange, max: reach(m, wp, arena) });
   });
   if (ranges.length === 0) return 0; // out of ammo: charge and hope
   const maxes = ranges.map((r) => r.max).sort((a, b) => a - b);
@@ -127,21 +157,29 @@ const armorAgainst = (target: MechStats, type: MountedWeapon['type']) => {
   }
 };
 
-export type Fighter = { build: Build; tax?: Tax };
+/** mods: used for raid bosses (hp and damage multipliers). */
+export type Fighter = {
+  build: Build;
+  tax?: Tax;
+  mods?: { hp?: number; damage?: number };
+};
 
-export const simulateBattle = (
-  a: Fighter,
-  b: Fighter,
-  arena: Arena,
-  seed: string
-): BattleResult => {
+export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: string): BattleResult => {
   const rng = createRng(`battle:${seed}`);
   const W = arena.width;
   const H = arena.height;
+  const statsOf = (f: Fighter) => {
+    const st = computeStats(f.build, arena, f.tax);
+    return f.mods?.hp ? { ...st, hp: Math.round(st.hp * f.mods.hp) } : st;
+  };
   const mechs: [MechState, MechState] = [
-    newState(computeStats(a.build, arena, a.tax), W * 0.12, H * 0.5, 0),
-    newState(computeStats(b.build, arena, b.tax), W * 0.88, H * 0.5, 1),
+    newState(statsOf(a), W * 0.12, H * 0.5, 0),
+    newState(statsOf(b), W * 0.88, H * 0.5, 1),
   ];
+  mechs[0].dmgMult = a.mods?.damage ?? 1;
+  mechs[1].dmgMult = b.mods?.damage ?? 1;
+  const specials: SpecialEvent[] = [];
+  const active = (m: MechState, kind: MechStats['behavior']) => m.s.behavior === kind && m.specialUntil > tick;
   const frames: number[] = [];
   const events: ShotEvent[] = [];
   const hazardHits: number[] = [];
@@ -179,15 +217,54 @@ export const simulateBattle = (
       const uy = dy / dist;
       const want = desiredRange(me, arena);
       const band = 30;
+
+      // ── pilot chip special: once per fight ──
+      if (!me.specialUsed) {
+        let dur = 0;
+        const hpPct = me.hp / me.s.hp;
+        switch (me.s.behavior) {
+          case 'rush':
+            if (tick >= 12 && dist > want + band) dur = 30;
+            break;
+          case 'kite':
+            if (dist < want * 0.6) dur = 40;
+            break;
+          case 'turtle':
+            if (hpPct < 0.6) dur = 50;
+            break;
+          case 'sniper':
+            if (tick >= 25 && !me.moving && dist <= want + band) {
+              me.charged = true;
+              dur = 1;
+            }
+            break;
+          case 'berserk':
+            if (hpPct < 0.35) dur = 45;
+            break;
+          case 'flank':
+            if (hpPct < 0.8) dur = 30;
+            break;
+        }
+        if (dur > 0) {
+          me.specialUsed = true;
+          me.specialUntil = tick + dur;
+          specials.push({
+            t: tick,
+            by: i === 0 ? 0 : 1,
+            kind: me.s.behavior,
+            until: tick + dur,
+          });
+        }
+      }
       let radial = 0;
       if (dist > want + band) radial = 1;
       else if (dist < want - band) radial = -1;
 
       let strafe = 0.15;
-      if (me.s.behavior === 'flank') strafe = 0.85;
+      if (active(me, 'flank')) strafe = 1.4;
+      else if (me.s.behavior === 'flank') strafe = 0.85;
       else if (me.s.behavior === 'kite') strafe = 0.4;
-      else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk')
-        strafe = 0.12;
+      else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk') strafe = 0.12;
       if (tick % 45 === 0 && rng.chance(0.5)) me.strafeSign *= -1;
 
       // Backed into a wall? Slide along it instead of getting pinned.
@@ -197,12 +274,7 @@ export const simulateBattle = (
         radial = -0.2;
         const tx = -uy * me.strafeSign;
         const ty = ux * me.strafeSign;
-        if (
-          me.x + tx * 60 < 20 ||
-          me.x + tx * 60 > W - 20 ||
-          me.y + ty * 60 < 20 ||
-          me.y + ty * 60 > H - 20
-        ) {
+        if (me.x + tx * 60 < 20 || me.x + tx * 60 > W - 20 || me.y + ty * 60 < 20 || me.y + ty * 60 > H - 20) {
           me.strafeSign *= -1;
         }
       }
@@ -211,9 +283,8 @@ export const simulateBattle = (
       let my = uy * radial + ux * strafe * me.strafeSign;
       const mag = Math.sqrt(mx * mx + my * my);
 
-      const sniperSet =
-        me.s.behavior === 'sniper' && radial >= 0 && dist <= want + band;
-      const turtleSet = me.s.behavior === 'turtle' && radial <= 0;
+      const sniperSet = me.s.behavior === 'sniper' && radial >= 0 && dist <= want + band;
+      const turtleSet = (me.s.behavior === 'turtle' && radial <= 0) || active(me, 'turtle');
       if (me.planted > 0 || sniperSet || turtleSet || mag < 0.001) {
         me.moving = false;
         if (me.planted > 0) me.planted--;
@@ -226,6 +297,8 @@ export const simulateBattle = (
           speed = me.s.speed;
           me.energy -= boostCost;
         }
+        if (active(me, 'rush')) speed = me.s.speed * 1.8;
+        if (active(me, 'flank')) speed = me.s.speed * 1.6;
         me.x = clamp(me.x + mx * speed * DT, 20, W - 20);
         me.y = clamp(me.y + my * speed * DT, 20, H - 20);
         me.moving = true;
@@ -249,56 +322,61 @@ export const simulateBattle = (
       const dx = foe.x - me.x;
       const dy = foe.y - me.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      const longest = me.s.weapons.reduce(
+        (best, wp, w) => (wp.maxRange > (me.s.weapons[best]?.maxRange ?? 0) ? w : best),
+        0
+      );
       me.s.weapons.forEach((wp, w) => {
-        me.cooldown[w] = me.cooldown[w]! - 1;
+        me.cooldown[w] = me.cooldown[w]! - (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1);
         if (me.cooldown[w]! > 0) return;
         const ammo = me.ammo[w];
         if (ammo !== null && ammo !== undefined && ammo <= 0) return;
         if (dist < wp.minRange || dist > reach(me, wp, arena)) return;
         if (me.energy < wp.energyCost) return;
-        if (me.overheated && me.s.behavior !== 'berserk') return;
+        if (me.overheated && me.s.behavior !== 'berserk' && !active(me, 'berserk')) return;
+        const crit = me.charged && w === longest;
+        if (crit) me.charged = false;
 
         me.cooldown[w] = wp.cooldown;
         me.heat += wp.heat * arena.heatGen;
         me.energy -= wp.energyCost;
         if (ammo !== null && ammo !== undefined) me.ammo[w] = ammo - 1;
-        if (wp.heavy && me.s.legType !== 'tank')
-          me.planted = Math.max(me.planted, 6);
+        if (wp.heavy && me.s.legType !== 'tank') me.planted = Math.max(me.planted, 6);
 
         let acc = wp.accuracy * me.s.accuracy * (1 - foe.s.jam);
         if (me.s.behavior === 'sniper' && !me.moving) acc *= 1.42;
         if (me.s.behavior === 'turtle') acc *= 1.12;
         if (wp.type === 'explosive') acc *= arena.explosiveAccuracy;
         acc *= 1 - 0.25 * (dist / wp.maxRange);
-        let ev =
-          foe.s.evasion *
-          (foe.moving ? 1 : 0.3) *
-          (0.5 + 0.5 * (dist / wp.maxRange));
+        let ev = foe.s.evasion * (foe.moving ? 1 : 0.3) * (0.5 + 0.5 * (dist / wp.maxRange));
         if (foe.s.behavior === 'kite' && foe.moving) ev *= 1.2;
+        if (active(foe, 'kite')) {
+          ev += 0.3;
+          acc *= 0.7;
+        }
+        if (active(foe, 'flank')) ev += 0.5;
         if (wp.homing) ev *= 0.4;
-        const p = clamp(acc * (1 - ev), 0.05, 0.97);
+        let p = clamp(acc * (1 - ev), 0.05, 0.97);
+        if (crit) p = Math.min(0.97, p + 0.35);
         const hit = rng.chance(p);
 
         let dmg = 0;
         let blocked = false;
         if (hit) {
-          dmg =
-            wp.damage *
-            DAMAGE_SCALE *
-            (wp.type === 'energy' ? arena.energyDamage : 1);
+          dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.8; // braced
           if (foe.s.behavior === 'rush') dmg *= 1.08; // reckless
+          dmg *= me.dmgMult;
+          if (crit) dmg *= 3.5;
+          if (active(me, 'berserk')) dmg *= 1.25;
+          if (active(foe, 'turtle')) dmg *= 0.5;
           dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;
           if (sh && rng.chance(0.6)) {
             const canAfford = foe.energy >= sh.energyPerHit;
             if (canAfford) {
               foe.energy -= sh.energyPerHit;
-              dmg *=
-                1 -
-                (wp.type === 'melee' && sh.energyPerHit > 0
-                  ? sh.block * 0.4
-                  : sh.block);
+              dmg *= 1 - (wp.type === 'melee' && sh.energyPerHit > 0 ? sh.block * 0.4 : sh.block);
               blocked = true;
             }
           }
@@ -313,6 +391,7 @@ export const simulateBattle = (
           hit,
           dmg: Math.round(dmg),
           blocked,
+          ...(crit ? { crit: true } : {}),
         });
       });
     }
@@ -343,5 +422,6 @@ export const simulateBattle = (
     events,
     damage: [Math.round(m0.dealt), Math.round(m1.dealt)],
     hazardHits,
+    specials,
   };
 };

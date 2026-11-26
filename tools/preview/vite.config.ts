@@ -8,9 +8,7 @@ export default defineConfig({
   plugins: [react(), tailwind()],
   resolve: {
     alias: {
-      '@devvit/web/client': fileURLToPath(
-        new URL('./devvit-stub.ts', import.meta.url)
-      ),
+      '@devvit/web/client': fileURLToPath(new URL('./devvit-stub.ts', import.meta.url)),
     },
   },
   build: {

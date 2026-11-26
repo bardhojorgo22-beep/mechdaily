@@ -1,9 +1,4 @@
-import type {
-  EnterResponse,
-  InitResponse,
-  LeaderboardResponse,
-  ResultsResponse,
-} from '../../shared/api';
+import type { EnterResponse, InitResponse, LeaderboardResponse, ResultsResponse } from '../../shared/api';
 import type { FactionId } from '../../shared/game/factions';
 import type { Build } from '../../shared/game/mech';
 
@@ -14,11 +9,8 @@ const call = async <T>(path: string, init?: RequestInit): Promise<T> => {
   });
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg =
-      data && typeof data === 'object' ? Reflect.get(data, 'message') : null;
-    throw new Error(
-      typeof msg === 'string' ? msg : `Request failed (${res.status})`
-    );
+    const msg = data && typeof data === 'object' ? Reflect.get(data, 'message') : null;
+    throw new Error(typeof msg === 'string' ? msg : `Request failed (${res.status})`);
   }
   // Server and client share these types; the server is the only writer.
   const typed: T = JSON.parse(JSON.stringify(data));

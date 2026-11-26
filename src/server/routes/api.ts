@@ -33,8 +33,7 @@ import {
 
 export const api = new Hono();
 
-const err = (message: string) =>
-  ({ status: 'error', message }) satisfies ErrorResponse;
+const err = (message: string) => ({ status: 'error', message }) satisfies ErrorResponse;
 
 const nextMidnight = () => {
   const d = new Date();
@@ -86,9 +85,7 @@ api.post('/save', async (c) => {
   const { userId } = context;
   if (!userId) return c.json(err('Log in to save your mech.'), 401);
   const body: unknown = await c.req.json().catch(() => null);
-  const build = validateBuild(
-    body && typeof body === 'object' ? Reflect.get(body, 'build') : null
-  );
+  const build = validateBuild(body && typeof body === 'object' ? Reflect.get(body, 'build') : null);
   if (!build) return c.json(err('That build is not valid.'), 400);
   await saveBuild(userId, build);
   return c.json({ type: 'save', ok: true });
@@ -96,12 +93,9 @@ api.post('/save', async (c) => {
 
 api.post('/enter', async (c) => {
   const { userId, username } = context;
-  if (!userId || !username)
-    return c.json(err('Log in to enter the tournament.'), 401);
+  if (!userId || !username) return c.json(err('Log in to enter the tournament.'), 401);
   const body: unknown = await c.req.json().catch(() => null);
-  const build = validateBuild(
-    body && typeof body === 'object' ? Reflect.get(body, 'build') : null
-  );
+  const build = validateBuild(body && typeof body === 'object' ? Reflect.get(body, 'build') : null);
   if (!build) return c.json(err('That build is not valid.'), 400);
   const { day } = await ensureState();
   const r = await enter(day, userId, username, build);
@@ -115,11 +109,9 @@ api.post('/enter', async (c) => {
 
 api.post('/faction', async (c) => {
   const { userId, username } = context;
-  if (!userId || !username)
-    return c.json(err('Log in to join a faction.'), 401);
+  if (!userId || !username) return c.json(err('Log in to join a faction.'), 401);
   const body: unknown = await c.req.json().catch(() => null);
-  const f: unknown =
-    body && typeof body === 'object' ? Reflect.get(body, 'faction') : null;
+  const f: unknown = body && typeof body === 'object' ? Reflect.get(body, 'faction') : null;
   if (!isFactionId(f)) return c.json(err('Unknown faction.'), 400);
   const faction = await joinFaction(userId, username, f);
   return c.json({ type: 'faction', faction });

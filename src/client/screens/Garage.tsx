@@ -9,14 +9,8 @@ import {
   type Build,
   type Tax,
 } from '../../shared/game/mech';
-import {
-  SLOTS,
-  SLOT_SHORT,
-  getPart,
-  partsForSlot,
-  type Part,
-  type Slot,
-} from '../../shared/game/parts';
+import { SLOTS, SLOT_SHORT, getPart, partsForSlot, type Part, type Slot } from '../../shared/game/parts';
+import { SPECIALS } from '../../shared/game/battle';
 import { PixelMech } from '../components/PixelMech';
 import { sfx } from '../lib/sfx';
 
@@ -29,32 +23,17 @@ const partStats = (p: Part): string[] => {
     case 'head':
       return [`HP ${p.hp}`, `AIM ${pct(p.accuracy)}`, `SENSOR ${p.sensor}m`];
     case 'core':
-      return [
-        `HP ${p.hp}`,
-        `ARM-K ${pct(p.armorK)}`,
-        `ARM-E ${pct(p.armorE)}`,
-        `COOL ${p.cooling}`,
-        `LOAD +${p.load}`,
-      ];
+      return [`HP ${p.hp}`, `ARM-K ${pct(p.armorK)}`, `ARM-E ${pct(p.armorE)}`, `COOL ${p.cooling}`, `LOAD +${p.load}`];
     case 'arms':
       return [`HP ${p.hp}`, `AIM ${pct(p.accuracy)}`];
     case 'legs':
-      return [
-        p.legType.toUpperCase(),
-        `HP ${p.hp}`,
-        `LOAD ${p.load}t`,
-        `MOVE ${pct(p.mobility)}`,
-      ];
+      return [p.legType.toUpperCase(), `HP ${p.hp}`, `LOAD ${p.load}t`, `MOVE ${pct(p.mobility)}`];
     case 'booster':
       return [`THRUST ${p.thrust}`, `DRAIN ${p.boostDrain}/s`];
     case 'generator':
-      return [
-        `OUT ${p.output}/s`,
-        `TANK ${p.capacity}`,
-        `COOL ${p.cooling >= 0 ? '+' : ''}${p.cooling}`,
-      ];
+      return [`OUT ${p.output}/s`, `TANK ${p.capacity}`, `COOL ${p.cooling >= 0 ? '+' : ''}${p.cooling}`];
     case 'chip':
-      return [];
+      return [`SPECIAL: ${SPECIALS[p.behavior].name.toUpperCase()}`];
     default:
       if ('weapon' in p) {
         const w = p.weapon;
@@ -72,9 +51,7 @@ const partStats = (p: Part): string[] => {
       if ('shield' in p)
         return [
           `BLOCK ${pct(p.shield.block)}`,
-          ...(p.shield.energyPerHit
-            ? [`EN ${p.shield.energyPerHit}/block`]
-            : []),
+          ...(p.shield.energyPerHit ? [`EN ${p.shield.energyPerHit}/block`] : []),
         ];
       if ('utility' in p) {
         const u = p.utility;
@@ -116,9 +93,7 @@ const Bar = ({
         }}
       />
     </div>
-    <div className={`w-16 text-right ${warn ? 'text-rust font-semibold' : ''}`}>
-      {text}
-    </div>
+    <div className={`w-16 text-right ${warn ? 'text-rust font-semibold' : ''}`}>{text}</div>
   </div>
 );
 
@@ -132,10 +107,7 @@ type Props = {
 
 export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
   const [tab, setTab] = useState<Tab>('weaponR');
-  const st = useMemo(
-    () => computeStats(build, arena, tax),
-    [build, arena, tax]
-  );
+  const st = useMemo(() => computeStats(build, arena, tax), [build, arena, tax]);
   const set = (slot: Slot, id: string) => {
     if (build.parts[slot] !== id) sfx.equip();
     onChange({ ...build, parts: { ...build.parts, [slot]: id } });
@@ -160,33 +132,12 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
       </div>
 
       <div className="sticker p-3 flex gap-3 items-center">
-        <PixelMech
-          key={partsKey}
-          build={build}
-          size={120}
-          bob
-          className="pop"
-        />
+        <PixelMech key={partsKey} build={build} size={120} bob className="pop" />
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <Bar label="HP" value={st.hp} max={6000} text={`${st.hp}`} />
-          <Bar
-            label="ARMOR K"
-            value={st.armorK}
-            max={0.65}
-            text={pct(st.armorK)}
-          />
-          <Bar
-            label="ARMOR E"
-            value={st.armorE}
-            max={0.65}
-            text={pct(st.armorE)}
-          />
-          <Bar
-            label="SPEED"
-            value={st.speed}
-            max={130}
-            text={`${Math.round(st.speed)} m/s`}
-          />
+          <Bar label="ARMOR K" value={st.armorK} max={0.65} text={pct(st.armorK)} />
+          <Bar label="ARMOR E" value={st.armorE} max={0.65} text={pct(st.armorE)} />
+          <Bar label="SPEED" value={st.speed} max={130} text={`${Math.round(st.speed)} m/s`} />
           <Bar
             label="WEIGHT"
             value={st.weight}
@@ -201,26 +152,16 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
             text={`${st.energyRegen >= 0 ? '+' : ''}${Math.round(st.energyRegen)}/s`}
             warn={st.energyRegen <= 0}
           />
-          <Bar
-            label="COOLING"
-            value={Math.max(0, st.cooling)}
-            max={80}
-            text={`${Math.round(st.cooling)}/s`}
-          />
+          <Bar label="COOLING" value={Math.max(0, st.cooling)} max={80} text={`${Math.round(st.cooling)}/s`} />
         </div>
       </div>
 
       {(st.overweight > 0 || st.energyRegen <= 0) && (
         <div className="sticker p-2 text-xs bg-sun">
           {st.overweight > 0 && (
-            <div>
-              ⚠ {pct(st.overweight)} overweight — you'll crawl. Lighter parts or
-              stronger legs.
-            </div>
+            <div>⚠ {pct(st.overweight)} overweight — you'll crawl. Lighter parts or stronger legs.</div>
           )}
-          {st.energyRegen <= 0 && (
-            <div>⚠ Your parts drain more power than the generator makes.</div>
-          )}
+          {st.energyRegen <= 0 && <div>⚠ Your parts drain more power than the generator makes.</div>}
         </div>
       )}
 
@@ -234,12 +175,8 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
             <div className="font-display font-black text-[13px] uppercase truncate">
               {t === 'paint' ? 'Paint' : SLOT_SHORT[t]}
             </div>
-            <div
-              className={`text-[10px] truncate ${tab === t ? 'text-paper' : 'text-mute'}`}
-            >
-              {t === 'paint'
-                ? DECALS[build.paint.decal]
-                : getPart(build.parts[t]).name}
+            <div className={`text-[10px] truncate ${tab === t ? 'text-paper' : 'text-mute'}`}>
+              {t === 'paint' ? DECALS[build.paint.decal] : getPart(build.parts[t]).name}
             </div>
           </button>
         ))}
@@ -265,8 +202,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
                       background: c,
                       borderWidth: 3,
                       borderColor: '#1b1a17',
-                      outline:
-                        build.paint[key] === i ? '3px solid #e4572e' : 'none',
+                      outline: build.paint[key] === i ? '3px solid #e4572e' : 'none',
                       outlineOffset: 2,
                     }}
                     onClick={() =>
@@ -287,9 +223,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
                 <button
                   key={d}
                   className={`tag py-1 ${build.paint.decal === i ? 'bg-ink text-paper' : 'bg-card'}`}
-                  onClick={() =>
-                    onChange({ ...build, paint: { ...build.paint, decal: i } })
-                  }
+                  onClick={() => onChange({ ...build, paint: { ...build.paint, decal: i } })}
                 >
                   {d}
                 </button>
@@ -313,24 +247,16 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
                 onClick={() => set(tab, p.id)}
               >
                 <div className="flex items-center gap-2">
-                  <div className="font-display font-black text-lg leading-none">
-                    {p.name}
-                  </div>
-                  {active && (
-                    <span className="tag bg-ink text-paper">equipped</span>
-                  )}
-                  {t > 0.05 && (
-                    <span className="tag bg-rust text-white">
-                      popular · +{Math.round(t * 45)}% wt
-                    </span>
-                  )}
+                  <div className="font-display font-black text-lg leading-none">{p.name}</div>
+                  {active && <span className="tag bg-ink text-paper">equipped</span>}
+                  {t > 0.05 && <span className="tag bg-rust text-white">popular · +{Math.round(t * 45)}% wt</span>}
                   <div className="ml-auto text-[11px] text-mute">
-                    {p.weight}t
-                    {!active && dw !== 0 ? ` (${dw > 0 ? '+' : ''}${dw})` : ''}
+                    {p.weight}t{!active && dw !== 0 ? ` (${dw > 0 ? '+' : ''}${dw})` : ''}
                     {p.drain ? ` · ${p.drain}en` : ''}
                   </div>
                 </div>
                 <div className="text-xs mt-0.5">{p.blurb}</div>
+                {p.slot === 'chip' && <div className="text-[11px] mt-0.5 text-mute">{SPECIALS[p.behavior].blurb}</div>}
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {partStats(p).map((x) => (
                     <span key={x} className="tag bg-white">

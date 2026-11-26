@@ -22,12 +22,8 @@ const audio = (): AudioContext | null => {
     if (!ctx) {
       // iOS: play web audio even when the ring/silent switch is on
       const nav: unknown = navigator;
-      const session: unknown =
-        nav && typeof nav === 'object'
-          ? Reflect.get(nav, 'audioSession')
-          : null;
-      if (session && typeof session === 'object')
-        Reflect.set(session, 'type', 'playback');
+      const session: unknown = nav && typeof nav === 'object' ? Reflect.get(nav, 'audioSession') : null;
+      if (session && typeof session === 'object') Reflect.set(session, 'type', 'playback');
       ctx = new AudioContext();
       master = ctx.createGain();
       master.gain.value = 0.35;
@@ -95,14 +91,7 @@ export const onMuteChange = (l: (m: boolean) => void) => {
   return () => listeners.delete(l);
 };
 
-const tone = (
-  freq: number,
-  endFreq: number,
-  dur: number,
-  wave: Wave,
-  vol: number,
-  delay = 0
-) => {
+const tone = (freq: number, endFreq: number, dur: number, wave: Wave, vol: number, delay = 0) => {
   const a = audio();
   if (!a || !master) return;
   const t = a.currentTime + delay;
@@ -152,8 +141,7 @@ export const sfx = {
     tone(660, 660, 0.07, 'square', 0.12, 0.05);
   },
   shoot: (type: 'kinetic' | 'energy' | 'explosive' | 'melee', side: 0 | 1) => {
-    if (!throttle(`shoot-${type}-${side}`, type === 'kinetic' ? 70 : 110))
-      return;
+    if (!throttle(`shoot-${type}-${side}`, type === 'kinetic' ? 70 : 110)) return;
     const pitch = side === 0 ? 1 : 0.85;
     switch (type) {
       case 'kinetic':
@@ -191,24 +179,21 @@ export const sfx = {
     tone(880, 880, 0.08, 'square', 0.1);
     tone(880, 880, 0.08, 'square', 0.1, 0.14);
   },
-  count: (go: boolean) =>
-    go
-      ? tone(880, 1760, 0.3, 'square', 0.18)
-      : tone(440, 440, 0.12, 'square', 0.15),
+  count: (go: boolean) => (go ? tone(880, 1760, 0.3, 'square', 0.18) : tone(440, 440, 0.12, 'square', 0.15)),
   ko: () => {
     noise(0.9, 0.5, 2500);
     tone(200, 30, 0.9, 'sawtooth', 0.2);
   },
-  win: () =>
-    [523, 659, 784, 1047].forEach((f, i) =>
-      tone(f, f, 0.14, 'square', 0.14, i * 0.11)
-    ),
-  lose: () =>
-    [392, 330, 262, 196].forEach((f, i) =>
-      tone(f, f * 0.98, 0.18, 'triangle', 0.16, i * 0.14)
-    ),
-  enter: () =>
-    [262, 392, 523].forEach((f, i) =>
-      tone(f, f, 0.1, 'square', 0.14, i * 0.07)
-    ),
+  win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.14, 'square', 0.14, i * 0.11)),
+  lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, f * 0.98, 0.18, 'triangle', 0.16, i * 0.14)),
+  special: () => {
+    tone(220, 880, 0.25, 'square', 0.14);
+    tone(440, 1760, 0.25, 'sawtooth', 0.06, 0.05);
+    noise(0.2, 0.12, 4000, 0.02);
+  },
+  crit: () => {
+    noise(0.4, 0.45, 5000);
+    tone(1800, 200, 0.35, 'sawtooth', 0.15);
+  },
+  enter: () => [262, 392, 523].forEach((f, i) => tone(f, f, 0.1, 'square', 0.14, i * 0.07)),
 };

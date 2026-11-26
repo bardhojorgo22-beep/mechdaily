@@ -28,9 +28,7 @@ const init = {
   myBuild: null,
   myEntry: null,
   entryCount: 14,
-  faction: new URLSearchParams(location.search).has('nofaction')
-    ? null
-    : 'tide',
+  faction: new URLSearchParams(location.search).has('nofaction') ? null : 'tide',
   factionTotals: { foundry: 42, tide: 57, static: 31 },
   factionToday: { foundry: 5, tide: 6, static: 3 },
   profile: { entries: 3, wins: 5, titles: 0, streak: 3, bestStreak: 3 },
@@ -59,8 +57,7 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
       headers: { 'Content-Type': 'application/json' },
     });
   if (url.startsWith('/api/init')) return json(init);
-  if (url.startsWith('/api/results'))
-    return json({ type: 'results', dayNumber: 1, result: t });
+  if (url.startsWith('/api/results')) return json({ type: 'results', dayNumber: 1, result: t });
   if (url.startsWith('/api/leaderboard'))
     return json({
       type: 'leaderboard',
@@ -69,7 +66,6 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
         { username: 'other', wins: 3 },
       ],
     });
-  if (url.startsWith('/api/'))
-    return json({ ok: true, entryCount: 15, streak: 4, faction: 'tide' });
+  if (url.startsWith('/api/')) return json({ ok: true, entryCount: 15, streak: 4, faction: 'tide' });
   return realFetch(input, initArg);
 };
