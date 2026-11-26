@@ -157,7 +157,8 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
   const set = (slot: Slot, id: string) => {
     if (build.parts[slot] === id) return;
     const next = { ...build.parts, [slot]: id };
-    const gained = synergiesOf(next).find((s) => !active.includes(s));
+    const fresh = synergiesOf(next).filter((s) => !active.includes(s));
+    const gained = fresh.find((s) => SYNERGIES[s].tier === 'legendary') ?? fresh[0];
     if (gained) {
       sfx.hype(2, true);
       setFlash(gained);
@@ -212,7 +213,15 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
       <div className="text-center font-display font-black text-sm tracking-wide -mb-1">“{title.toUpperCase()}”</div>
 
       {flash && (
-        <div className="sticker p-3 text-center pop" style={{ background: '#1b1a17', color: '#ffc914' }}>
+        <div
+          className="sticker p-3 text-center pop"
+          style={{
+            background: '#1b1a17',
+            color: '#ffc914',
+            boxShadow: SYNERGIES[flash].tier === 'legendary' ? '0 0 0 3px #ffc914, 6px 6px 0 #1b1a17' : undefined,
+          }}
+        >
+          {SYNERGIES[flash].tier === 'legendary' && <div className="text-xs tracking-widest">🌟 LEGENDARY 🌟</div>}
           <div className="font-display text-2xl stamp">⚡ SYNERGY: {SYNERGIES[flash].name.toUpperCase()}</div>
           <div className="text-xs mt-1" style={{ color: '#efe8da' }}>
             {found[flash] && found[flash]!.by !== username
@@ -363,29 +372,59 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
           Some odd part pairs secretly work together. The first redditor in this sub to equip one gets credited in the
           comments.
         </div>
-        <div className="flex flex-col gap-1.5 mt-2">
-          {SYNERGY_IDS.map((id) => {
-            const s = SYNERGIES[id];
-            const f = found[id];
-            const mine = active.includes(id);
-            return f || mine ? (
-              <div key={id} className="border-2 border-ink p-2" style={{ background: mine ? '#fff3b0' : '#f8f4ec' }}>
-                <div className="flex items-center gap-2">
-                  <span className="font-display font-black">{s.name}</span>
-                  {mine && <span className="tag bg-ink text-paper">active</span>}
-                  <span className="ml-auto text-[10px] text-mute">{f ? `found by u/${f.by}` : 'not credited yet'}</span>
-                </div>
-                <div className="text-[11px]">{s.parts.map((p) => getPart(p).name).join(' + ')}</div>
-                <div className="text-[11px] text-mute">{s.effect}</div>
+        {(
+          [
+            ['legendary', '🌟 Legendary · 3-part combos'],
+            ['pair', 'Part pairs'],
+            ['chip', 'Pilot chip + weapon'],
+          ] as const
+        ).map(([tier, label]) => {
+          const ids = SYNERGY_IDS.filter((id) => (SYNERGIES[id].tier ?? 'pair') === tier);
+          return (
+            <div key={tier} className="mt-3">
+              <div className="text-[11px] font-semibold text-mute mb-1">
+                {label.toUpperCase()} · {ids.filter((id) => found[id]).length}/{ids.length}
               </div>
-            ) : (
-              <div key={id} className="border-2 border-dashed border-ink p-2 opacity-80">
-                <span className="font-display font-black">???</span>
-                <span className="text-[11px] ml-2 italic">{s.hint}</span>
+              <div className="flex flex-col gap-1.5">
+                {ids.map((id) => {
+                  const s = SYNERGIES[id];
+                  const f = found[id];
+                  const mine = active.includes(id);
+                  const legend = tier === 'legendary';
+                  return f || mine ? (
+                    <div
+                      key={id}
+                      className="border-2 border-ink p-2"
+                      style={{
+                        background: mine ? '#fff3b0' : legend ? '#fff8d6' : '#f8f4ec',
+                        borderColor: legend ? '#c98a00' : undefined,
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-display font-black">{s.name}</span>
+                        {mine && <span className="tag bg-ink text-paper">active</span>}
+                        <span className="ml-auto text-[10px] text-mute">
+                          {f ? `found by u/${f.by}` : 'not credited yet'}
+                        </span>
+                      </div>
+                      <div className="text-[11px]">{s.parts.map((p) => getPart(p).name).join(' + ')}</div>
+                      <div className="text-[11px] text-mute">{s.effect}</div>
+                    </div>
+                  ) : (
+                    <div
+                      key={id}
+                      className="border-2 border-dashed p-2 opacity-80"
+                      style={{ borderColor: legend ? '#c98a00' : '#1b1a17' }}
+                    >
+                      <span className="font-display font-black">{legend ? '🌟 ???' : '???'}</span>
+                      <span className="text-[11px] ml-2 italic">{s.hint}</span>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </details>
     </div>
   );

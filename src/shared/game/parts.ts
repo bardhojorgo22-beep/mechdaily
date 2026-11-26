@@ -232,7 +232,7 @@ export const PARTS: Part[] = [
     weight: 2,
     drain: 5,
     hp: 70,
-    accuracy: 1.12,
+    accuracy: 1.1,
     sensor: 1200,
   },
   {
@@ -371,7 +371,7 @@ export const PARTS: Part[] = [
     weight: 7,
     drain: 7,
     hp: 195,
-    accuracy: 1.13,
+    accuracy: 1.11,
     armorK: 0.03,
   },
 
@@ -764,7 +764,7 @@ export const PARTS: Part[] = [
       energyCost: 22,
       accuracy: 0.8,
       ammo: null,
-      chill: 0.12,
+      chill: 0.09,
     }),
   },
   {
@@ -776,15 +776,15 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'energy',
-      damage: 80,
+      damage: 72,
       minRange: 0,
       maxRange: 420,
       cooldown: 9,
       heat: 7,
       energyCost: 18,
-      accuracy: 0.92,
+      accuracy: 0.86,
       ammo: null,
-      shock: 40,
+      shock: 30,
     }),
   },
   {
@@ -816,7 +816,7 @@ export const PARTS: Part[] = [
     drain: 1,
     weapon: w({
       type: 'melee',
-      damage: 62,
+      damage: 53,
       minRange: 0,
       maxRange: 110,
       cooldown: 3,
@@ -1144,7 +1144,7 @@ export const PARTS: Part[] = [
     blurb: 'Drops mines as it moves. Chase it at your peril.',
     weight: 9,
     drain: 2,
-    utility: { mines: { damage: 260, every: 45 } },
+    utility: { mines: { damage: 230, every: 45 } },
   },
   {
     id: 'bk-smoke',

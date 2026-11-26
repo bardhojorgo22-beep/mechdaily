@@ -53,3 +53,12 @@ test('arena never repeats two days running', () => {
     d.setUTCDate(d.getUTCDate() + 1);
   }
 });
+
+test('every synergy uses parts from different slots (otherwise it can never be equipped)', async () => {
+  const { SYNERGIES, SYNERGY_IDS } = await import('../src/shared/game/synergies');
+  const { getPart } = await import('../src/shared/game/parts');
+  for (const id of SYNERGY_IDS) {
+    const slots = SYNERGIES[id].parts.map((p) => getPart(p).slot);
+    assert.equal(new Set(slots).size, slots.length, `${id} has two parts in one slot: ${slots.join(', ')}`);
+  }
+});

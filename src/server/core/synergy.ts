@@ -33,8 +33,11 @@ export const discover = async (build: Build, username: string, day: string): Pro
   if (target && target.startsWith('t3_')) {
     for (const id of fresh) {
       const s = SYNERGIES[id];
+      const legend = s.tier === 'legendary';
       const text = [
-        `🔓 **Hidden synergy discovered!**`,
+        legend
+          ? `🌟 **LEGENDARY synergy discovered!** 🌟`
+          : `🔓 **Hidden ${s.tier === 'chip' ? 'pilot ' : ''}synergy discovered!**`,
         ``,
         `u/${username} found **${s.name}**: ${s.parts.map((p) => getPart(p).name).join(' + ')}.`,
         ``,

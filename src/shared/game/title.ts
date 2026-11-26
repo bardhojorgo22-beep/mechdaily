@@ -43,8 +43,8 @@ const ADJECTIVE: [string, string][] = [
 export const buildTitle = (build: Build, arena: Arena = ARENAS[0]!): string => {
   const st = computeStats(build, arena);
   const style = fightingStyle(st).name;
-  const syn = st.synergies[0];
-  if (syn) return `${SYNERGIES[syn].name} ${style}`;
+  const syn = st.synergies.find((s) => SYNERGIES[s].tier === 'legendary') ?? st.synergies[0];
+  if (syn) return SYNERGIES[syn].tier === 'legendary' ? `${SYNERGIES[syn].name}` : `${SYNERGIES[syn].name} ${style}`;
   const have = new Set(Object.values(build.parts));
   const adj = ADJECTIVE.find(([id]) => have.has(id))?.[1];
   return adj ? `${adj} ${style}` : style;

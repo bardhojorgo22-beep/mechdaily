@@ -75,8 +75,26 @@ export const findHighlights = (r: BattleResult): Highlight[] => {
     const key = `${ev.by}:${ev.syn}`;
     if (ev.t - (synShown[key] ?? -999) < 90) continue;
     synShown[key] = ev.t;
-    const by: 0 | 1 = ev.syn === 'guardian' ? (ev.by === 0 ? 1 : 0) : ev.by;
-    push({ t: ev.t, by, text: `⚡ ${SYNERGIES[ev.syn].name.toUpperCase()}!`, tier: 1, focus: by }, 0);
+    const defensive = ev.syn === 'guardian' || ev.syn === 'riotcontrol' || (ev.syn === 'titan' && ev.bashed);
+    const by: 0 | 1 = defensive ? (ev.by === 0 ? 1 : 0) : ev.by;
+    const legend = SYNERGIES[ev.syn].tier === 'legendary';
+    push(
+      {
+        t: ev.t,
+        by,
+        text: `${legend ? '🌟' : '⚡'} ${SYNERGIES[ev.syn].name.toUpperCase()}!`,
+        tier: legend ? 2 : 1,
+        focus: by,
+      },
+      0
+    );
+  }
+  for (const me of r.misc) {
+    if (!me.syn) continue;
+    const key = `${me.by}:${me.syn}`;
+    if (me.t - (synShown[key] ?? -999) < 90) continue;
+    synShown[key] = me.t;
+    push({ t: me.t, by: me.by, text: `⚡ ${SYNERGIES[me.syn].name.toUpperCase()}!`, tier: 1, focus: me.by }, 0);
   }
 
   for (const sp of r.specials) {

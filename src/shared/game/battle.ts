@@ -35,6 +35,7 @@ export type MiscEvent = {
   x: number;
   y: number;
   until?: number;
+  syn?: SynergyId;
 };
 
 /** Once-per-fight pilot chip special moves. */
@@ -165,6 +166,8 @@ type MechState = {
   mines: { x: number; y: number; armed: number }[];
   smokeUntil: number;
   nextSmoke: number;
+  reelUntil: number; // Reel & Rip: chainsaw bonus after a harpoon hit
+  frozenCd: number; // Absolute Zero: can't be frozen again until
   ramUntil: number; // Velocity ram in progress
 };
 
@@ -212,6 +215,8 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   mines: [],
   smokeUntil: 0,
   nextSmoke: 40,
+  reelUntil: 0,
+  frozenCd: 0,
   ramUntil: 0,
 });
 
@@ -502,7 +507,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       speed *= 1 - me.chill; // frostbitten
       if (me.s.behavior === 'velocity') {
         // momentum: crawl at first, build up while moving, ram at full speed
-        if (me.moving && tick >= me.ramUntil) me.momentum = Math.min(1, me.momentum + DT / 7);
+        if (me.moving && tick >= me.ramUntil)
+          me.momentum = Math.min(1, me.momentum + (DT / 7) * (syn(me, 'deathdrive') ? 1.5 : 1));
         speed *= 0.7 + 0.55 * me.momentum;
         if (me.momentum >= 1 && tick >= me.ramUntil && dist < 750 && dist > 90) {
           me.ramUntil = tick + 14;
@@ -683,13 +689,13 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const m = mechs[i]!;
       const o = mechs[1 - i]!;
       const by: 0 | 1 = i === 0 ? 0 : 1;
-      m.chill = Math.max(0, m.chill - 0.12 * DT);
-      m.spin = Math.max(0, m.spin - 0.012);
+      m.chill = Math.max(0, m.chill - 0.04 * DT);
+      if (!syn(m, 'bullethell')) m.spin = Math.max(0, m.spin - 0.012);
       if (m.s.barrier && m.barrierHp < m.s.barrier.hp)
         m.barrierHp = Math.min(m.s.barrier.hp, m.barrierHp + m.s.barrier.regen * DT);
       if (m.s.mines && tick >= m.nextMine && !passive[i]) {
         m.nextMine = tick + m.s.mines.every;
-        m.mines.push({ x: m.x, y: m.y, armed: tick + 10 });
+        m.mines.push({ x: m.x, y: m.y, armed: tick + (syn(m, 'minefield') ? 0 : 10) });
         if (m.mines.length > 4) m.mines.shift();
         misc.push({ t: tick, by, kind: 'mine-drop', x: m.x, y: m.y });
       }
@@ -699,7 +705,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         const md = Math.hypot(o.x - mn.x, o.y - mn.y);
         if (md > 60) continue;
         m.mines.splice(k, 1);
-        misc.push({ t: tick, by, kind: 'mine-boom', x: mn.x, y: mn.y });
+        misc.push({
+          t: tick,
+          by,
+          kind: 'mine-boom',
+          x: mn.x,
+          y: mn.y,
+          ...(syn(m, 'minefield') ? { syn: 'minefield' as const } : {}),
+        });
         if (invuln(o)) continue;
         const dmg = m.s.mines!.damage * DAMAGE_SCALE * (stripped(o) ? 1 : 1 - armorAgainst(o.s, 'explosive'));
         o.hp -= dmg;
@@ -744,7 +757,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       // Velocity ram connects: a crash, not a weapon
       if (tick < me.ramUntil && dist < 90) {
         me.ramUntil = tick;
-        let dmg = (foe.s.hp * 0.035 + me.s.weight * 4) * me.dmgMult;
+        let dmg = (foe.s.hp * 0.035 + me.s.weight * 4) * me.dmgMult * (syn(me, 'deathdrive') ? 1.7 : 1);
         if (invuln(foe)) dmg = 0;
         const d = dist || 1;
         const shove = 220 / (1 + foe.s.weight / 100);
@@ -762,6 +775,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           dmg: Math.round(dmg),
           blocked: false,
           ram: true,
+          ...(syn(me, 'deathdrive') ? { syn: 'deathdrive' as const } : {}),
           ...(stag ? { stagger: true } : {}),
         });
       }
@@ -772,7 +786,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       me.s.weapons.forEach((wp, w) => {
         me.cooldown[w] =
           me.cooldown[w]! -
-          (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1) -
+          (active(me, 'berserk') && tick % 2 === 0 && wp.cooldown > 3 ? 2 : 1) -
           (active(me, 'redshift') ? 1 : 0) -
           (stripped(me) && tick % 2 === 0 ? 1 : 0);
         const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
@@ -781,15 +795,17 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (me.cooldown[w]! > 0) return;
         const ammo = me.ammo[w];
         if (ammo !== null && ammo !== undefined && ammo <= 0) return;
-        if (dist < wp.minRange || dist > reach(me, wp, arena)) return;
+        const extraReach = syn(me, 'titan') && wp.partId === 'r-hammer' ? 80 : 0;
+        if (dist < wp.minRange || dist > reach(me, wp, arena) + extraReach) return;
         if (me.energy < wp.energyCost) return;
         if (me.overheated && me.s.behavior !== 'berserk' && !active(me, 'berserk')) return;
         const crit = me.charged && w === longest;
         if (crit) me.charged = false;
 
         me.cooldown[w] = syn(me, 'siege') && wp.partId === 'bk-howitzer' ? Math.round(wp.cooldown * 0.8) : wp.cooldown;
+        if (syn(me, 'bullethell') && wp.partId === 'lw-pistol') me.cooldown[w] = Math.round(wp.cooldown / 1.5);
         if (wp.spinUp) {
-          me.spin = Math.min(1, me.spin + 0.09);
+          me.spin = Math.min(1, me.spin + (syn(me, 'leadstorm') ? 0.18 : 0.09));
           me.cooldown[w] = Math.max(2, Math.round(wp.cooldown / (1 + 2 * me.spin)));
         }
         let bashed = false;
@@ -811,6 +827,10 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (me.s.behavior === 'turtle') acc *= 1.05;
         if (wp.type === 'explosive') acc *= arena.explosiveAccuracy;
         acc *= 1 - 0.25 * (dist / wp.maxRange);
+        if (syn(me, 'leadstorm') && wp.partId === 'r-minigun') {
+          acc *= 1.1;
+          synTag = 'leadstorm';
+        }
         if (syn(me, 'siege') && wp.partId === 'bk-howitzer') {
           acc *= 1.25;
           synTag = 'siege';
@@ -839,7 +859,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (foe.qbUntil > tick) ev += 0.3;
         if (wp.homing) ev *= 0.6;
         let p = clamp(acc * (1 - ev), 0.05, 0.97);
-        if (crit) p = Math.min(0.97, p + 0.35);
+        if (crit) p = syn(me, 'volley') && wp.partId === 'r-bow' ? 1 : Math.min(0.97, p + 0.35);
         let hit = rng.chance(p);
         let zapped = false;
         if (hit && wp.type !== 'melee' && syn(foe, 'guardian') && rng.chance(0.16)) {
@@ -855,10 +875,11 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (wp.type === 'melee') dmg *= 1 + me.s.meleeBonus;
           if (me.s.behavior === 'gambler') {
             const roll = rng.next();
-            if (roll < 0.22) {
+            const x2 = syn(me, 'jackpot') && wp.partId === 'r-minigun' ? 0.35 : 0.22;
+            if (roll < x2) {
               dmg *= 2;
               gamble = 'x2';
-            } else if (roll < 0.32) {
+            } else if (roll < x2 + 0.1) {
               dmg *= 0.5;
               gamble = 'half';
             }
@@ -866,14 +887,44 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.9; // braced
           if (me.s.behavior === 'rush' && dist < 320) dmg *= 1.12; // up close and committed
           dmg *= me.dmgMult;
-          if (crit) dmg *= 2.5;
+          if (crit) dmg *= syn(me, 'volley') && wp.partId === 'r-bow' ? 4 : 2.5;
           if (wp.charge) dmg *= 1 + Math.max(0, Math.min(1.2, closingSpeed / Math.max(60, me.s.speed)));
           if (active(me, 'berserk')) dmg *= 1.15;
           if (active(me, 'rush') || active(me, 'flank')) dmg *= 1.2; // hits land harder at full tilt
           if (tick > OVERTIME_TICK) dmg *= 1 + (tick - OVERTIME_TICK) / 150; // sudden death
-          if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.25, (me.heat - 100) / 200);
+          if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.15, (me.heat - 100) / 250);
           if (active(foe, 'turtle')) dmg *= 0.6;
           // ── hidden synergies ──
+          if (syn(me, 'shatter') && wp.partId === 'lw-knuckle' && foe.chill > 0.08) {
+            dmg *= 2.2;
+            synTag = 'shatter';
+          }
+          if (syn(me, 'overload') && wp.partId === 'r-tesla') {
+            dmg *= 1.06;
+            foe.heat += 12;
+            synTag = 'overload';
+          }
+          if (syn(me, 'conductor') && wp.partId === 'r-tesla' && foe.acid >= 0.06) {
+            dmg *= 1.25;
+            synTag = 'conductor';
+          }
+          if (syn(me, 'reelin') && wp.partId === 'lw-saber' && me.reelUntil > tick) {
+            dmg *= 1.5;
+            synTag = 'reelin';
+          }
+          if (syn(me, 'demolition') && (wp.partId === 'lw-grenade' || wp.partId === 'bk-howitzer')) {
+            dmg *= 1.18;
+            synTag = 'demolition';
+          }
+          if (syn(me, 'unstoppable') && wp.partId === 'r-hammer') {
+            dmg *= 1.25;
+            synTag = 'unstoppable';
+          }
+          if (syn(me, 'stormcaller') && wp.partId === 'bk-orbit') {
+            dmg *= 1.25;
+            foe.energy = Math.max(0, foe.energy - 15);
+            synTag = 'stormcaller';
+          }
           if (syn(me, 'hunter') && wp.partId === 'lw-knuckle' && foe.markedUntil > tick) {
             dmg *= 2;
             foe.markedUntil = 0;
@@ -918,11 +969,19 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               if (sh.bash > 0 && wp.type === 'melee' && !jug(me)) {
                 me.planted = Math.max(me.planted, sh.bash);
                 bashed = true;
+                if (syn(foe, 'riotcontrol')) synTag = 'riotcontrol';
+                if (syn(foe, 'titan')) synTag = 'titan';
+              }
+              if (sh.bash > 0 && wp.type === 'melee' && syn(foe, 'titan') && !invuln(me)) {
+                const reflect = dmg * 0.25;
+                me.hp -= reflect;
+                foe.dealt += reflect;
               }
             }
           }
           // a charged shot is a big moment, never a one-shot
-          if (crit) dmg = Math.min(dmg, foe.s.hp * 0.35);
+          if (crit) dmg = Math.min(dmg, foe.s.hp * (syn(me, 'volley') && wp.partId === 'r-bow' ? 0.5 : 0.35));
+          if (crit && syn(me, 'volley') && wp.partId === 'r-bow') synTag = 'volley';
           // stopping power: a big ranged hit stops a charging mech in its tracks
           const charging = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.2;
           const staggerTicks =
@@ -934,7 +993,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               ? Math.min(9, Math.round(3 + (wp.damage * DAMAGE_SCALE * 4) / Math.max(40, foe.s.weight) / 8))
               : 0;
           const trapStagger = syn(me, 'beartrap') && wp.partId === 'r-pile' && !active(foe, 'turtle') ? 4 : 0;
-          const slamStagger = wp.slam && !active(foe, 'turtle') && tick >= foe.staggerImmune ? 6 : 0;
+          const slamStagger =
+            wp.slam && ((!active(foe, 'turtle') && tick >= foe.staggerImmune) || syn(me, 'unstoppable')) ? 6 : 0;
           const totalStagger = jug(foe) ? 0 : Math.max(staggerTicks, trapStagger, slamStagger);
           staggerFlag = totalStagger > 0;
           if (invuln(foe)) {
@@ -948,13 +1008,40 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           const d = dist || 1;
           // on-hit statuses
           if (dmg > 0 && !invuln(foe)) {
-            if (wp.chill && !jug(foe)) foe.chill = Math.min(0.55, foe.chill + wp.chill);
+            if (wp.chill && !jug(foe))
+              foe.chill = Math.min(0.55, foe.chill + wp.chill * (syn(me, 'absolutezero') ? 1.6 : 1));
             if (wp.shock) {
               foe.energy = Math.max(0, foe.energy - wp.shock);
               foe.ob = false;
               foe.qbCd = Math.max(foe.qbCd, 10);
             }
             if (wp.acid) foe.acid = Math.min(0.25, foe.acid + wp.acid);
+            if (syn(me, 'frostbite') && wp.partId === 'lw-acid' && !jug(foe))
+              foe.chill = Math.min(0.55, foe.chill + 0.05);
+            if (syn(me, 'frostbite') && wp.partId === 'r-frost') foe.acid = Math.min(0.25, foe.acid + 0.008);
+            if (
+              syn(me, 'absolutezero') &&
+              wp.partId === 'r-frost' &&
+              foe.chill >= 0.25 &&
+              tick >= foe.frozenCd &&
+              !jug(foe)
+            ) {
+              foe.planted = Math.max(foe.planted, 15);
+              foe.cooldown = foe.cooldown.map((c) => Math.max(c, 15));
+              foe.frozenCd = tick + 80;
+              synTag = 'absolutezero';
+            }
+            if (wp.partId === 'r-harpoon') {
+              me.reelUntil = tick + 30;
+              if (syn(me, 'slingshot')) {
+                me.momentum = Math.min(1, me.momentum + 0.6);
+                synTag = 'slingshot';
+              }
+            }
+            if (syn(me, 'bloodlust') && wp.partId === 'r-chainsaw') {
+              me.hp = Math.min(me.s.hp, me.hp + me.s.hp * 0.004 * (active(me, 'berserk') ? 2 : 1));
+              synTag = 'bloodlust';
+            }
             if (wp.yank && !jug(foe)) {
               const pullBy = Math.min(wp.yank, Math.max(0, dist - Math.max(90, me.want))); // drag them to where I want them
               foe.x = clamp(foe.x - ((foe.x - me.x) / d) * pullBy, 20, W - 20);
@@ -989,7 +1076,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         }
         if (!hit && wp.splash && !invuln(foe) && dist <= reach(me, wp, arena)) {
           // grenades bounce and blow up near the target anyway
-          dmg = wp.damage * DAMAGE_SCALE * wp.splash * (stripped(foe) ? 1 : 1 - armorAgainst(foe.s, wp.type));
+          dmg =
+            wp.damage *
+            DAMAGE_SCALE *
+            wp.splash *
+            (syn(me, 'demolition') ? 1.5 : 1) *
+            (stripped(foe) ? 1 : 1 - armorAgainst(foe.s, wp.type));
           pending.push({ stagger: 0, target: i === 0 ? 1 : 0, dmg, kx: 0, ky: 0 });
           me.dealt += dmg;
         }

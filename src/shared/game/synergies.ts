@@ -13,6 +13,29 @@ export const SYNERGY_IDS = [
   'lockon',
   'thunder',
   'guardian',
+  // new pairs
+  'shatter',
+  'overload',
+  'conductor',
+  'reelin',
+  'minefield',
+  'riotcontrol',
+  'leadstorm',
+  'frostbite',
+  'bunker',
+  'demolition',
+  // pilot chip + weapon
+  'volley',
+  'bloodlust',
+  'unstoppable',
+  'jackpot',
+  'slingshot',
+  // legendary 3-part combos
+  'titan',
+  'absolutezero',
+  'stormcaller',
+  'deathdrive',
+  'bullethell',
 ] as const;
 export type SynergyId = (typeof SYNERGY_IDS)[number];
 
@@ -24,6 +47,8 @@ export type Synergy = {
   effect: string;
   /** shown before anyone has found it */
   hint: string;
+  /** pair (default), a pilot-chip combo, or a rare 3-part legendary */
+  tier?: 'chip' | 'legendary';
 };
 
 export const SYNERGIES: Record<SynergyId, Synergy> = {
@@ -103,6 +128,156 @@ export const SYNERGIES: Record<SynergyId, Synergy> = {
     parts: ['bk-orbit', 'lw-aegis'],
     effect: 'The drone zaps 16% of incoming shots out of the air.',
     hint: 'A little friend with a big shield.',
+  },
+  shatter: {
+    id: 'shatter',
+    name: 'Shatter',
+    parts: ['r-frost', 'lw-knuckle'],
+    effect: 'Punches on a chilled target shatter the ice for ×2.2 damage.',
+    hint: 'Freeze it first, then punch it.',
+  },
+  overload: {
+    id: 'overload',
+    name: 'Overload',
+    parts: ['r-tesla', 'g-fusion'],
+    effect: 'Tesla arcs hit a bit harder and pump heat into the target until it overheats.',
+    hint: 'Too much power, aimed at someone else.',
+  },
+  conductor: {
+    id: 'conductor',
+    name: 'Conductor',
+    parts: ['lw-acid', 'r-tesla'],
+    effect: 'Tesla arcs do +25% to targets dripping with acid.',
+    hint: 'Wet metal conducts.',
+  },
+  reelin: {
+    id: 'reelin',
+    name: 'Reel & Rip',
+    parts: ['r-harpoon', 'lw-saber'],
+    effect: 'After a harpoon hit, the saber does +50% for 3 seconds.',
+    hint: 'Hook them, then bring the blade.',
+  },
+  minefield: {
+    id: 'minefield',
+    name: 'Minefield',
+    parts: ['bk-mines', 'r-harpoon'],
+    effect: 'Mines drop twice as often and arm instantly. Yank them onto your traps.',
+    hint: 'Leave a gift, then reel them in.',
+  },
+  riotcontrol: {
+    id: 'riotcontrol',
+    name: 'Riot Control',
+    parts: ['lw-riot', 'bk-smoke'],
+    effect: 'Smoke pops more often and shield bashes stun longer.',
+    hint: 'Gas and shields, the classic kit.',
+  },
+  leadstorm: {
+    id: 'leadstorm',
+    name: 'Lead Storm',
+    parts: ['r-minigun', 'a-gimbal'],
+    effect: 'The minigun spins up twice as fast and aims 10% truer.',
+    hint: 'Steady arms for a spinning gun.',
+  },
+  frostbite: {
+    id: 'frostbite',
+    name: 'Frostbite',
+    parts: ['r-frost', 'lw-acid'],
+    effect: 'Acid also chills, and frost shots also melt armor.',
+    hint: 'Ice and acid, both at once.',
+  },
+  bunker: {
+    id: 'bunker',
+    name: 'Bunker',
+    parts: ['bk-barrier', 'c-vault'],
+    effect: 'The barrier bubble is 30% bigger and recharges almost twice as fast.',
+    hint: 'The thickest core under a shield bubble.',
+  },
+  demolition: {
+    id: 'demolition',
+    name: 'Demolition',
+    parts: ['lw-grenade', 'bk-howitzer'],
+    effect: 'Explosions hit 18% harder, and grenade misses splash 50% more.',
+    hint: 'Everything that goes boom, all at once.',
+  },
+  volley: {
+    id: 'volley',
+    name: 'Volley',
+    tier: 'chip',
+    parts: ['p-sniper', 'r-bow'],
+    effect: 'The Sniper’s charged shot becomes a 4-arrow volley that never misses (up to half their HP).',
+    hint: 'A patient pilot with a bow.',
+  },
+  bloodlust: {
+    id: 'bloodlust',
+    name: 'Bloodlust',
+    tier: 'chip',
+    parts: ['p-berserk', 'r-chainsaw'],
+    effect: 'Chainsaw hits heal you a little. Double while raging.',
+    hint: 'A berserker and a saw.',
+  },
+  unstoppable: {
+    id: 'unstoppable',
+    name: 'Unstoppable',
+    tier: 'chip',
+    parts: ['p-juggernaut', 'r-hammer'],
+    effect: 'Hammer slams hit 25% harder and stagger through any defense.',
+    hint: 'An unstoppable pilot with an immovable weapon.',
+  },
+  jackpot: {
+    id: 'jackpot',
+    name: 'Jackpot',
+    tier: 'chip',
+    parts: ['p-gambler', 'r-minigun'],
+    effect: 'Minigun rounds roll double 35% of the time.',
+    hint: 'More bullets, more rolls of the dice.',
+  },
+  slingshot: {
+    id: 'slingshot',
+    name: 'Slingshot',
+    tier: 'chip',
+    parts: ['p-velocity', 'r-harpoon'],
+    effect: 'Harpoon hits fling you forward: +50% momentum each time.',
+    hint: 'Hook something and let it pull you up to speed.',
+  },
+  titan: {
+    id: 'titan',
+    name: 'THE JUGGERNAUT',
+    tier: 'legendary',
+    parts: ['r-hammer', 'lw-riot', 'p-juggernaut'],
+    effect: 'Hammer shockwaves reach much further, and every shield bash reflects 25% of the blocked melee damage.',
+    hint: 'Hammer, shield, and a pilot who never stops.',
+  },
+  absolutezero: {
+    id: 'absolutezero',
+    name: 'ABSOLUTE ZERO',
+    tier: 'legendary',
+    parts: ['r-frost', 'bk-fins', 'g-coil'],
+    effect: 'Frost chills much faster, and a chilled target freezes solid: can’t move or shoot for 1.5s.',
+    hint: 'Cold shots, cooling fins, and a power coil.',
+  },
+  stormcaller: {
+    id: 'stormcaller',
+    name: 'STORMCALLER',
+    tier: 'legendary',
+    parts: ['r-tesla', 'bk-orbit', 'g-fusion'],
+    effect: 'Your orbit drone fires lightning too: +25% damage and every hit drains power.',
+    hint: 'Lightning, a little drone, and the biggest power source.',
+  },
+  deathdrive: {
+    id: 'deathdrive',
+    name: 'DEATH DRIVE',
+    tier: 'legendary',
+    parts: ['p-velocity', 'r-lance', 'b-thruster'],
+    effect: 'Momentum builds 50% faster and the full-speed ram hits 70% harder.',
+    hint: 'A speed-hungry pilot, a lance, and the biggest booster.',
+  },
+  bullethell: {
+    id: 'bullethell',
+    name: 'BULLET HELL',
+    tier: 'legendary',
+    parts: ['r-minigun', 'lw-pistol', 'a-gimbal'],
+    effect: 'The minigun never spins down and the pistol fires 50% faster.',
+    hint: 'Two guns, steady arms, and absolutely no restraint.',
   },
 };
 

@@ -515,6 +515,7 @@ export const createRenderer = (
   };
   const burnUntil = [0, 0];
   const chillUntil = [0, 0];
+  const frozenUntil = [0, 0];
   const shockUntil = [0, 0];
   const acidUntil = [0, 0];
   const yankUntil = [0, 0];
@@ -930,6 +931,12 @@ export const createRenderer = (
         spawn(mid.x, mid.y, 10, ['#ffffff', '#3cf0ec', '#bffcfb'], 40, 0.3, 1);
         continue;
       }
+      if (ev.syn === 'absolutezero') {
+        frozenUntil[victim] = t + 15;
+        bursts.push({ x: at.x, y: at.y - 10, t, word: 'FROZEN!', big: true });
+        spawn(at.x, at.y, 30, ['#ffffff', '#bffcfb', '#3cf0ec'], 50, 0.8, 2);
+      }
+      if (ev.syn === 'stormcaller') spawn(at.x, at.y, 8, ['#ffffff', '#ffd23f'], 50, 0.2, 1);
       if (ev.syn && ev.hit) {
         // synergy hits get a gold flourish
         spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ffc914'], 55, 0.45, 1);
@@ -1483,6 +1490,16 @@ export const createRenderer = (
             railSounded.add(key);
             sfx.railCharge();
           }
+        }
+        // frozen solid (Absolute Zero)
+        if (t < frozenUntil[i]!) {
+          g.globalAlpha = 0.55;
+          g.fillStyle = '#bffcfb';
+          g.fillRect(Math.round(x - SW / 2 - 2), Math.round(y - SH / 2 - 2), SW + 4, SH + 4);
+          g.globalAlpha = 1;
+          g.strokeStyle = '#ffffff';
+          g.lineWidth = 1;
+          g.strokeRect(Math.round(x - SW / 2 - 2) + 0.5, Math.round(y - SH / 2 - 2) + 0.5, SW + 3, SH + 3);
         }
         // statuses
         if (t < chillUntil[i]!) {

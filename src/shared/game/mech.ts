@@ -248,8 +248,17 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   const speed = thrust * mobility * weightFactor * legSpeed * arena.speed * massFactor * 0.9;
   const evasion = clamp((speed / 346) * legEvasion * (arena.evasion[legType] ?? 1), 0, 0.55);
 
+  // synergies that simply change part numbers
+  const syns = synergiesOf(build.parts);
+  if (syns.includes('bunker') && barrier) barrier = { hp: barrier.hp * 1.3, regen: barrier.regen * 1.8 };
+  if (syns.includes('minefield') && mines) mines = { ...mines, every: Math.round(mines.every / 2) };
+  if (syns.includes('riotcontrol')) {
+    if (smoke) smoke = { ...smoke, every: Math.round(smoke.every * 0.7) };
+    if (shield) shield = { ...shield, bash: Math.round(shield.bash * 1.25) };
+  }
+
   return {
-    synergies: synergiesOf(build.parts),
+    synergies: syns,
     hp: Math.round(hp),
     armorK: clamp(armorK, 0, 0.65),
     armorE: clamp(armorE, 0, 0.65),

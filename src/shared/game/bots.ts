@@ -74,6 +74,51 @@ export const botName = (rng: Rng) => `${rng.pick(FIRST)} ${rng.pick(SECOND)}`;
 type Template = { name: string; slots: Partial<Record<Slot, string[]>> };
 const TEMPLATES: Template[] = [
   {
+    name: 'brute',
+    slots: {
+      head: ['h-horn', 'h-bucket'],
+      core: ['c-vault', 'c-ox'],
+      arms: ['a-ram', 'a-brace'],
+      legs: ['l-tread', 'l-crab', 'l-strider'],
+      booster: ['b-rocket', 'b-thruster'],
+      generator: ['g-furnace', 'g-coil'],
+      weaponR: ['r-hammer', 'r-chainsaw'],
+      weaponL: ['lw-riot', 'lw-knuckle', 'lw-door'],
+      back: ['bk-plate', 'bk-barrier', 'bk-magnet'],
+      chip: ['p-juggernaut', 'p-berserk', 'p-rush'],
+    },
+  },
+  {
+    name: 'elemental',
+    slots: {
+      head: ['h-visor', 'h-owl', 'h-needle'],
+      core: ['c-reactor', 'c-radiator', 'c-prism'],
+      arms: ['a-gimbal', 'a-wire'],
+      legs: ['l-spider', 'l-strider', 'l-hopper'],
+      booster: ['b-jet', 'b-drift'],
+      generator: ['g-fusion', 'g-coil'],
+      weaponR: ['r-frost', 'r-tesla'],
+      weaponL: ['lw-acid', 'lw-flamer', 'lw-aegis'],
+      back: ['bk-orbit', 'bk-fins', 'bk-smoke'],
+      chip: ['p-kite', 'p-flank', 'p-redshift', 'p-gambler'],
+    },
+  },
+  {
+    name: 'trapper',
+    slots: {
+      head: ['h-crown', 'h-visor'],
+      core: ['c-ox', 'c-shell'],
+      arms: ['a-brace', 'a-wire'],
+      legs: ['l-spider', 'l-strider'],
+      booster: ['b-drift', 'b-jet'],
+      generator: ['g-ember', 'g-battery', 'g-coil'],
+      weaponR: ['r-harpoon', 'r-minigun', 'r-rifle'],
+      weaponL: ['lw-grenade', 'lw-riot', 'lw-pistol'],
+      back: ['bk-mines', 'bk-smoke', 'bk-swarm'],
+      chip: ['p-kite', 'p-gambler', 'p-turtle', 'p-velocity'],
+    },
+  },
+  {
     name: 'sniper',
     slots: {
       head: ['h-needle', 'h-owl', 'h-crown'],
