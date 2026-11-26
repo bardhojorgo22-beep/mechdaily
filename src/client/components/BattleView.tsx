@@ -30,7 +30,13 @@ type Props = {
   bossSide?: 0 | 1 | null;
   /** Replaces the default "X wins" card when the fight ends. */
   footer?: ReactNode;
+  /** Extra buttons on the end card (e.g. share). */
+  actions?: ReactNode;
+  /** Tutorial captions: shown from tick t for a few seconds. */
+  tips?: Tip[] | undefined;
 };
+
+export type Tip = { t: number; text: string };
 
 /** White silhouette of a sprite, for hit flashes. */
 const whiteOf = (src: HTMLCanvasElement) => {
@@ -76,6 +82,8 @@ export const BattleView = ({
   onDone,
   bossSide = null,
   footer,
+  actions,
+  tips,
 }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [speed, setSpeed] = useState(1);
@@ -257,6 +265,16 @@ export const BattleView = ({
             </div>
           </div>
         )}
+        {(() => {
+          const tip = tips?.filter((x) => tick >= x.t && tick < x.t + 45).pop();
+          return tip && !intro ? (
+            <div key={tip.t} className="absolute inset-x-2 bottom-2 flex justify-center pointer-events-none pop">
+              <div className="text-xs px-2 py-1 border-2 border-ink" style={{ background: '#fffbe6', maxWidth: 420 }}>
+                💡 {tip.text}
+              </div>
+            </div>
+          ) : null;
+        })()}
         {callouts.map((c, k) => {
           const mine = tags[c.by] === 'YOU';
           const enemyOfYou = tags[c.by === 0 ? 1 : 0] === 'YOU';
@@ -329,6 +347,7 @@ export const BattleView = ({
         <div className="sticker p-3 text-center">
           {footer}
           <Reel result={result} side={0} />
+          {actions}
           {onDone && (
             <button className="btn bg-sun mt-3 w-full" onClick={onDone}>
               Continue
@@ -348,6 +367,7 @@ export const BattleView = ({
             s · damage {result.damage[0]} vs {result.damage[1]}
           </div>
           <Reel result={result} side={0} />
+          {actions}
           {onDone && (
             <button className="btn bg-sun mt-3 w-full" onClick={onDone}>
               Continue

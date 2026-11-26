@@ -6,6 +6,8 @@ import type {
   LeaderboardResponse,
   RaidResponse,
   ResultsResponse,
+  ShareRequest,
+  ShareResponse,
 } from '../../shared/api';
 import type { FactionId } from '../../shared/game/factions';
 import type { Build } from '../../shared/game/mech';
@@ -45,6 +47,7 @@ export const api = {
   raid: (build: Build) => call<RaidResponse>('/api/raid', { method: 'POST', body: JSON.stringify({ build }) }),
   challenge: (username: string, build: Build) =>
     call<ChallengeResponse>('/api/challenge', { method: 'POST', body: JSON.stringify({ username, build }) }),
+  share: (req: ShareRequest) => call<ShareResponse>('/api/share', { method: 'POST', body: JSON.stringify(req) }),
   challenges: () => call<ChallengesResponse>('/api/challenges'),
   results: (day: string) => call<ResultsResponse>(`/api/results/${day}`),
   leaderboard: () => call<LeaderboardResponse>('/api/leaderboard'),

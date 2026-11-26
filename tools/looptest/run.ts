@@ -65,6 +65,42 @@ check(
 );
 const chs = await req('/challenges');
 check(chs.json.list?.length === 1, `challenges list has 1 entry`);
+// sharing: server re-simulates and comments
+const sh = await req('/share', {
+  kind: 'duel',
+  a: build('Share A'),
+  b: build('Share B', { weaponR: 'r-rail' }),
+  aLabel: 'u/friend1',
+  bLabel: 'u/someoneelse',
+  arenaId: 'yard',
+  seed: 'share-1',
+  tax: {},
+});
+check(
+  sh.status === 200 && /beat/.test(sh.json.fight?.headline),
+  `friend1 shares a fight: "${sh.json.fight?.headline ?? sh.json.message}"`
+);
+const shareComment = log.find((l) => l.includes('shared a fight'));
+check(shareComment && !shareComment.includes('u/someoneelse'), 'share comment posted, no stray u/ pings');
+check(
+  (await req('/share', { kind: 'duel', a: { junk: 1 }, b: build('x'), arenaId: 'yard', seed: 's', tax: {} })).status ===
+    400,
+  'junk share rejected'
+);
+const sr = await req('/share', {
+  kind: 'raid',
+  a: build('Raider'),
+  aLabel: 'u/friend1',
+  arenaId: 'yard',
+  seed: 'raid-share',
+  tax: {},
+  day: '2026-11-26',
+});
+check(
+  sr.status === 200 && /damage/.test(sr.json.fight?.headline),
+  `raid share: "${sr.json.fight?.headline ?? sr.json.message}"`
+);
+check((await req('/init')).json.reel?.length === 2, 'fight reel shows both shares');
 as('joani', post1);
 const re = await req('/enter', { build: build('joani v2') });
 check(

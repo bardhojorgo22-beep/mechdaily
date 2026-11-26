@@ -31,7 +31,15 @@ const init = {
   faction: new URLSearchParams(location.search).has('nofaction') ? null : 'tide',
   factionTotals: { foundry: 42, tide: 57, static: 31 },
   factionToday: { foundry: 5, tide: 6, static: 3 },
-  profile: { entries: 3, wins: 5, titles: 0, streak: 3, bestStreak: 3, chalWins: 2, chalLosses: 1 },
+  profile: {
+    entries: new URLSearchParams(location.search).has('new') ? 0 : 3,
+    wins: 5,
+    titles: 0,
+    streak: 3,
+    bestStreak: 3,
+    chalWins: 2,
+    chalLosses: 1,
+  },
   champions: champs.map((b, i) => ({
     day: `2026-11-2${i}`,
     dayNumber: 1 - i,
@@ -52,6 +60,36 @@ const init = {
     ],
     factions: { foundry: 1000, tide: 4120, static: 0 },
   },
+  reel: [
+    {
+      id: '2',
+      kind: 'duel',
+      a: { ...DEFAULT_BUILD, name: 'Kettle Prime' },
+      b: champs[0],
+      aLabel: 'u/DunhillGri',
+      bLabel: 'bot',
+      arenaId: 'mud',
+      seed: 'reel-a',
+      tax: {},
+      by: 'DunhillGri',
+      at: 1,
+      headline: 'Kettle Prime beat ' + champs[0]!.name + ' FROM 1 HP',
+    },
+    {
+      id: '1',
+      kind: 'duel',
+      a: champs[1],
+      b: champs[2],
+      aLabel: 'u/someone',
+      bLabel: 'bot',
+      arenaId: 'yard',
+      seed: 'reel-b',
+      tax: {},
+      by: 'someone',
+      at: 0,
+      headline: champs[1]!.name + ' beat ' + champs[2]!.name + ' FLAWLESS',
+    },
+  ],
   last: {
     day: '2026-11-26',
     dayNumber: 1,
@@ -105,6 +143,8 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
         },
       ],
     });
+  if (url.startsWith('/api/share'))
+    return json({ type: 'share', left: 4, fight: { ...init.reel[0], id: '3', headline: 'just shared' } });
   if (url.startsWith('/api/raid'))
     return json({
       type: 'raid',

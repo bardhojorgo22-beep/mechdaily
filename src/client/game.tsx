@@ -4,7 +4,15 @@ import './index.css';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { context, navigateTo, showToast } from '@devvit/web/client';
-import type { ChallengeRecord, InitResponse, LeaderboardResponse, RaidState, ResultsResponse } from '../shared/api';
+import type {
+  ChallengeRecord,
+  InitResponse,
+  LeaderboardResponse,
+  RaidState,
+  ResultsResponse,
+  ShareRequest,
+  SharedFight,
+} from '../shared/api';
 import { getArena, type Arena } from '../shared/game/arenas';
 import { simulateBattle, type BattleResult } from '../shared/game/battle';
 import { botsForDay } from '../shared/game/bots';
@@ -18,6 +26,9 @@ import { PixelMech } from './components/PixelMech';
 import { api, countdown } from './lib/api';
 import { isMuted, onMuteChange, setMuted, sfx } from './lib/sfx';
 import { Garage } from './screens/Garage';
+import { Intro } from './screens/Intro';
+import { introDone, markIntroDone, tutorialFight } from './lib/intro';
+import type { Tip } from './components/BattleView';
 
 type Fight = {
   result: BattleResult;
@@ -29,8 +40,10 @@ type Fight = {
   bossSide?: 0 | 1;
   footer?: ReactNode;
   back: Screen;
+  share?: ShareRequest;
+  tips?: Tip[];
 };
-type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions' | 'challenge';
+type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions' | 'challenge' | 'intro';
 
 // Local backup of the last build, in case the server copy is missing.
 const BACKUP_KEY = 'mechdaily-build';
@@ -241,6 +254,8 @@ export const App = () => {
       .then((d) => {
         setData(d);
         setBuild(d.myBuild ?? d.myEntry ?? loadBackup() ?? DEFAULT_BUILD);
+        if (!d.myBuild && !d.myEntry && d.profile.entries === 0 && !introDone() && d.postDay === d.day)
+          setScreen('intro');
         loaded.current = true;
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not load'));
@@ -333,6 +348,16 @@ export const App = () => {
       arena,
       key: seed,
       back: 'practice',
+      share: {
+        kind: 'duel',
+        a: build,
+        b: opp,
+        aLabel: data?.username ? `u/${data.username}` : 'you',
+        bLabel: label,
+        arenaId: arena.id,
+        seed,
+        tax,
+      },
     });
     setScreen('battle');
   };
@@ -363,6 +388,17 @@ export const App = () => {
         key: r.seed,
         bossSide: 1,
         back: 'home',
+        share: {
+          kind: 'raid',
+          a: build,
+          b: boss.build,
+          aLabel: data.username ? `u/${data.username}` : 'you',
+          bLabel: 'daily boss',
+          arenaId: arena.id,
+          seed: r.seed,
+          tax,
+          day: data.day,
+        },
         footer: (
           <>
             <div className="font-display text-2xl leading-none stamp" style={{ color: '#c0392b' }}>
@@ -384,6 +420,58 @@ export const App = () => {
     }
   };
 
+  const replayShared = (f: SharedFight) => {
+    const ar = getArena(f.arenaId);
+    const result =
+      f.kind === 'raid' && f.day
+        ? simulateRaid(f.day, ar, f.tax, f.a, f.seed)
+        : simulateBattle({ build: f.a, tax: f.tax }, { build: f.b, tax: f.tax }, ar, f.seed);
+    const me = data?.username ? `u/${data.username}` : null;
+    setFight({
+      result,
+      builds: [f.a, f.b],
+      labels: [f.aLabel, f.bLabel],
+      tags: [f.aLabel === me ? 'YOU' : 'A', f.kind === 'raid' ? 'BOSS' : f.bLabel === me ? 'YOU' : 'B'],
+      arena: ar,
+      key: `reel:${f.id}`,
+      ...(f.kind === 'raid' ? { bossSide: 1 as const } : {}),
+      back: 'home',
+    });
+    setScreen('battle');
+  };
+
+  const startTutorial = () => {
+    const t = tutorialFight(build);
+    setFight({
+      result: t.result,
+      builds: t.builds,
+      labels: ['your mech', 'training bot'],
+      tags: ['YOU', 'FOE'],
+      arena: t.arena,
+      key: `tutorial:${fightCount.current++}`,
+      back: 'garage',
+      tips: t.tips,
+      footer: (
+        <>
+          <div className="font-display text-2xl leading-none stamp" style={{ color: '#2f7d1f' }}>
+            That's the whole game.
+          </div>
+          <div className="text-sm mt-2">
+            Now build your own. Every part changes how your mech fights. Enter before midnight UTC and watch the
+            bracket.
+          </div>
+        </>
+      ),
+    });
+    setScreen('battle');
+  };
+
+  const shareFight = async (req: ShareRequest) => {
+    const r = await api.share(req);
+    if (data) setData({ ...data, reel: [r.fight, ...data.reel] });
+    showToast(`Posted to the comments · ${r.left} share${r.left === 1 ? '' : 's'} left today`);
+  };
+
   const watchChallenge = (c: ChallengeRecord) => {
     const ar = getArena(c.arenaId);
     const result = simulateBattle({ build: c.aBuild, tax }, { build: c.bBuild, tax }, ar, c.seed);
@@ -396,6 +484,16 @@ export const App = () => {
       arena: ar,
       key: c.seed,
       back: 'challenge',
+      share: {
+        kind: 'duel',
+        a: c.aBuild,
+        b: c.bBuild,
+        aLabel: `u/${c.aPilot}`,
+        bLabel: `u/${c.bPilot}`,
+        arenaId: c.arenaId,
+        seed: c.seed,
+        tax,
+      },
     });
     setScreen('battle');
   };
@@ -475,6 +573,16 @@ export const App = () => {
     <div className="grid-paper min-h-screen">
       <div className="max-w-[560px] mx-auto p-3 pb-10 flex flex-col gap-3">
         {needFaction && <FactionPicker onPick={(f) => void pickFaction(f)} />}
+
+        {screen === 'intro' && (
+          <Intro
+            onWatch={startTutorial}
+            onSkip={() => {
+              markIntroDone();
+              setScreen('home');
+            }}
+          />
+        )}
 
         {screen === 'home' && (
           <>
@@ -576,6 +684,8 @@ export const App = () => {
               />
             )}
 
+            {data.reel.length > 0 && <FightReel reel={data.reel} onWatch={replayShared} />}
+
             {data.last && (
               <div className="sticker p-3">
                 <div className="text-[11px] font-semibold text-mute">DAY {data.last.dayNumber} RESULT</div>
@@ -614,7 +724,6 @@ export const App = () => {
                 <li>Parts that were too popular get heavier the next day. Don't copy the meta.</li>
               </ol>
             </details>
-
           </>
         )}
 
@@ -680,7 +789,12 @@ export const App = () => {
             arena={fight.arena}
             bossSide={fight.bossSide ?? null}
             footer={fight.footer}
-            onDone={() => setScreen(fight.back)}
+            tips={fight.tips}
+            actions={fight.share && data.username ? <ShareButton req={fight.share} onShare={shareFight} /> : null}
+            onDone={() => {
+              if (fight.tips) markIntroDone();
+              setScreen(fight.back);
+            }}
           />
         )}
 
@@ -805,6 +919,53 @@ export const App = () => {
   );
 };
 
+const ShareButton = ({ req, onShare }: { req: ShareRequest; onShare: (r: ShareRequest) => Promise<void> }) => {
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+  return (
+    <button
+      className="btn bg-teal mt-3 w-full"
+      disabled={state !== 'idle'}
+      onClick={() => {
+        setState('busy');
+        onShare(req)
+          .then(() => setState('done'))
+          .catch((e: unknown) => {
+            showToast(e instanceof Error ? e.message : 'Could not share');
+            setState('idle');
+          });
+      }}
+    >
+      {state === 'done'
+        ? '✓ Shared to comments'
+        : state === 'busy'
+          ? 'Posting…'
+          : '🎬 Share this fight to the comments'}
+    </button>
+  );
+};
+
+const FightReel = ({ reel, onWatch }: { reel: SharedFight[]; onWatch: (f: SharedFight) => void }) => (
+  <div className="sticker p-3">
+    <div className="text-[11px] font-semibold text-mute mb-2">🎬 FIGHT REEL · shared by redditors</div>
+    <div className="flex flex-col gap-1.5">
+      {reel.slice(0, 6).map((f) => (
+        <button
+          key={f.id}
+          className="sticker px-2 py-1.5 flex items-center gap-2 text-left text-sm"
+          onClick={() => onWatch(f)}
+        >
+          <PixelMech build={f.a} size={28} />
+          <span className="flex-1 min-w-0">
+            <span className="block truncate font-semibold">{f.headline}</span>
+            <span className="block text-[10px] text-mute">shared by u/{f.by}</span>
+          </span>
+          <span className="font-display font-black">▶</span>
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
 const ROUND_NAME = (fromEnd: number, total: number) =>
   fromEnd === 0 ? 'Final' : fromEnd === 1 ? 'Semifinals' : fromEnd === 2 ? 'Quarterfinals' : `Round ${total - fromEnd}`;
 
@@ -839,6 +1000,16 @@ const Bracket = ({
       arena,
       key: seed,
       back: 'bracket',
+      share: {
+        kind: 'duel',
+        a: ea.build,
+        b: eb.build,
+        aLabel: label(a),
+        bLabel: label(b),
+        arenaId: arena.id,
+        seed,
+        tax: t.tax,
+      },
     });
     onShow();
   };

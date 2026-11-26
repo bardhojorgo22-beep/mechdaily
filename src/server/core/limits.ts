@@ -7,3 +7,4 @@ const isTestSub = (): boolean => (context.subredditName ?? '').toLowerCase().end
 
 export const challengesPerDay = (): number => (isTestSub() ? TEST_LIMIT : 5);
 export const raidAttempts = (): number => (isTestSub() ? TEST_LIMIT : RAID_ATTEMPTS);
+export const sharesPerDay = (): number => (isTestSub() ? TEST_LIMIT : 5);

@@ -86,7 +86,29 @@ export type InitResponse = {
   champions: Champion[];
   last: LastResult | null;
   raid: RaidState;
+  reel: SharedFight[];
 };
+
+/** A replay someone shared to the comments. Everything needed to re-run it exactly. */
+export type ShareRequest = {
+  kind: 'duel' | 'raid';
+  a: Build;
+  b: Build;
+  aLabel: string;
+  bLabel: string;
+  arenaId: string;
+  seed: string;
+  tax: Tax;
+  /** raid: which day's boss */
+  day?: string;
+};
+export type SharedFight = ShareRequest & {
+  id: string;
+  by: string;
+  at: number;
+  headline: string;
+};
+export type ShareResponse = { type: 'share'; fight: SharedFight; left: number };
 
 export type SaveRequest = { build: Build };
 export type EnterResponse = {

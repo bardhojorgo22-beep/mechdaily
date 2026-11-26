@@ -8,6 +8,7 @@ import type {
   RaidResponse,
   ChallengeResponse,
   ChallengesResponse,
+  ShareResponse,
   ResultsResponse,
 } from '../../shared/api';
 import { arenaForDay } from '../../shared/game/arenas';
@@ -15,6 +16,7 @@ import { isFactionId } from '../../shared/game/factions';
 import { validateBuild } from '../../shared/game/mech';
 import { attackBoss, raidState } from '../core/raid';
 import { challenge, listChallenges, rememberUser } from '../core/challenge';
+import { getReel, shareFight } from '../core/share';
 import {
   dayNumberOf,
   dayPost,
@@ -89,6 +91,7 @@ api.get('/init', async (c) => {
       champions: await getChampions(),
       last: await lastResultFor(day, userId),
       raid: await raidState(day, userId, username),
+      reel: await getReel(),
     };
     return c.json(res);
   } catch (e) {
@@ -158,6 +161,17 @@ api.post('/challenge', async (c) => {
   const r = await challenge(day, await getTax(day), userId, username, build, target);
   if (!r.ok) return c.json(err(r.message), r.status);
   const res: ChallengeResponse = { type: 'challenge', record: r.record, left: r.left };
+  return c.json(res);
+});
+
+api.post('/share', async (c) => {
+  const { userId, username } = context;
+  if (!userId || !username) return c.json(err('Log in to share a fight.'), 401);
+  const body: unknown = await c.req.json().catch(() => null);
+  const { day } = await ensureState();
+  const r = await shareFight(day, userId, username, body);
+  if (!r.ok) return c.json(err(r.message), r.status);
+  const res: ShareResponse = { type: 'share', fight: r.fight, left: r.left };
   return c.json(res);
 });
 
