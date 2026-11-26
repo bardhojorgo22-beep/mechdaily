@@ -105,9 +105,11 @@ type Props = {
   tax: Tax;
   onChange: (b: Build) => void;
   onBack: () => void;
+  /** Fire your weapons at a harmless target dummy. */
+  onTestFire?: () => void;
 };
 
-export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
+export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire }: Props) => {
   const [tab, setTab] = useState<Tab>('weaponR');
   const st = useMemo(() => computeStats(build, arena, tax), [build, arena, tax]);
   const style = fightingStyle(st);
@@ -161,7 +163,12 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
 
       <div className="sticker p-2 flex items-center gap-2" style={{ background: '#1b1a17', color: '#efe8da' }}>
         <span className="tag bg-sun text-ink">{style.name}</span>
-        <span className="text-[11px]">{style.plan}</span>
+        <span className="text-[11px] flex-1">{style.plan}</span>
+        {onTestFire && (
+          <button className="btn bg-sun text-ink text-xs whitespace-nowrap" onClick={onTestFire}>
+            🎯 Test fire
+          </button>
+        )}
       </div>
 
       {(st.overweight > 0 || st.energyRegen <= 0) && (

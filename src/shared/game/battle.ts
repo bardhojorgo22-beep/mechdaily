@@ -283,7 +283,7 @@ const ORBIT: Record<MechStats['behavior'], number> = {
 export type Fighter = {
   build: Build;
   tax?: Tax;
-  mods?: { hp?: number; damage?: number };
+  mods?: { hp?: number; damage?: number; /** never fires: a target dummy */ passive?: boolean };
 };
 
 export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: string): BattleResult => {
@@ -300,6 +300,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
   ];
   mechs[0].dmgMult = a.mods?.damage ?? 1;
   mechs[1].dmgMult = b.mods?.damage ?? 1;
+  const passive = [!!a.mods?.passive, !!b.mods?.passive];
   const specials: SpecialEvent[] = [];
   const moves: MoveEvent[] = [];
   const lastStands: LastStandEvent[] = [];
@@ -580,6 +581,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     // ── firing (resolved simultaneously) ──
     const pending: { target: 0 | 1; dmg: number; kx: number; ky: number; stagger: number }[] = [];
     for (let i = 0; i < 2; i++) {
+      if (passive[i]) continue;
       const me = mechs[i]!;
       const foe = mechs[1 - i]!;
       const dx = foe.x - me.x;

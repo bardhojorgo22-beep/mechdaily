@@ -71,6 +71,7 @@ export const THEMES: Record<string, Theme> = {
 
 type Fx =
   | 'tracer'
+  | 'pistol'
   | 'bullet'
   | 'pellets'
   | 'beam'
@@ -87,7 +88,7 @@ type Fx =
 
 const FX_BY_PART: Record<string, Fx> = {
   'r-rifle': 'tracer',
-  'lw-pistol': 'tracer',
+  'lw-pistol': 'pistol',
   'r-buzz': 'bullet',
   'r-scatter': 'pellets',
   'r-beam': 'beam',
@@ -114,6 +115,7 @@ const FALLBACK: Record<ShotEvent['type'], Fx> = {
 const flightOf = (fx: Fx, dist: number): number => {
   switch (fx) {
     case 'tracer':
+    case 'pistol':
     case 'bullet':
     case 'pellets':
       return Math.max(1, dist / 70);
@@ -451,7 +453,30 @@ export const createRenderer = (
   const meleeSlotAt: Record<string, ShotEvent['slot']> = {};
   for (const ev of result.events) if (ev.type === 'melee') meleeSlotAt[`${ev.by}:${ev.t}`] = ev.slot;
   const chargeSounded = new Set<string>();
-  const WINDUP = 6; // ticks of charge-up before a melee strike
+  // each melee weapon has its own rhythm: jabs snap, pile bunkers wind up long and slam
+  const MELEE_STYLE: Record<string, { windup: number; back: number; out: number; hold: number }> = {
+    punch: { windup: 2, back: 3, out: 11, hold: 0.7 },
+    slash: { windup: 4, back: 5, out: 8, hold: 1.2 },
+    thrust: { windup: 5, back: 6, out: 14, hold: 1.8 },
+    spike: { windup: 9, back: 7, out: 12, hold: 2.4 },
+  };
+  // rail shots telegraph with a charge glow; drones orbit their owner all fight
+  const railTimes: number[][] = [[], []];
+  const firstFire = new Map<string, number>(); // `${side}:${slot}` -> tick it first fired
+  for (const ev of result.events) {
+    const pid = builds[ev.by].parts[ev.slot];
+    if (pid === 'r-rail') railTimes[ev.by]!.push(ev.t);
+    const k = `${ev.by}:${ev.slot}`;
+    if (!firstFire.has(k)) firstFire.set(k, ev.t);
+  }
+  const railSounded = new Set<string>();
+  const hasDrone = builds.map((b) => b.parts.back === 'bk-orbit');
+  const dronePos = (i: number, p: { x: number; y: number }, t: number) => {
+    const a = t * 0.35 + i * 3;
+    return { x: p.x + Math.cos(a) * 14, y: p.y - SPRITE_H * 0.55 + Math.sin(a) * 4 };
+  };
+  const burnUntil = [0, 0];
+  const lastPunch = [-99, -99];
   const bursts: { x: number; y: number; t: number; word: string; big: boolean }[] = [];
   const brokenUp = [false, false];
   const vel = [
@@ -708,7 +733,7 @@ export const createRenderer = (
       const foe = pos[1 - ev.by]!;
       const fx = fxOf(ev);
       const m = gun(me, foe, ev.slot);
-      if (!quiet || ev.dmg > 140) sfx.shoot(ev.type, ev.by);
+      if (!quiet || ev.dmg > 140) sfx.weapon(fx, ev.by);
       if (ev.crit) {
         sfx.crit();
         flash = Math.max(flash, 0.1);
@@ -749,7 +774,32 @@ export const createRenderer = (
         );
       }
       if (fx === 'missiles' || fx === 'shell') spawn(m.x, m.y, 5, ['#d8d2c4', '#8a8478'], 12, 0.6, 2);
+      if (fx === 'missiles') spawn(m.x, m.y - 4, 6, ['#ffd23f', '#ff7a2f'], 30, 0.3, 1, 0, -1, 0.4); // launch flare upward
       if (fx === 'rail') shake = Math.max(shake, 2);
+      if (fx === 'pellets') {
+        // shotgun: a fat cone of muzzle fire and a shove back
+        const dx = foe.x - m.x;
+        const d = Math.abs(dx) || 1;
+        spawn(m.x, m.y, 10, ['#ffffff', '#fff3b0', '#ffd23f', '#ff7a2f'], 70, 0.18, 2, dx / d, 0, 0.45);
+        spawn(me.x, me.y + 10, 4, [theme.speck, theme.dark], 20, 0.4, 2, -dx / d, -0.2, 0.5);
+        shake = Math.max(shake, 2);
+      }
+      if (fx === 'spike') {
+        // pile bunker blows its steam after slamming
+        spawn(
+          me.x - (foe.x > me.x ? 8 : -8),
+          me.y - 4,
+          10,
+          ['#ffffff', '#e8e2d4', '#c9c4b8'],
+          22,
+          0.9,
+          2,
+          foe.x > me.x ? -0.8 : 0.8,
+          -0.6,
+          0.5,
+          2
+        );
+      }
     }
 
     // ── projectiles landing ──
@@ -789,13 +839,16 @@ export const createRenderer = (
         freeze = Math.max(freeze, ev.type === 'melee' ? (big ? 0.16 : 0.1) : ev.dmg > 300 ? 0.13 : big ? 0.07 : 0);
       if (ev.type === 'melee') {
         const words: Record<string, string[]> = {
-          spike: ['CRACK!', 'KRAK!'],
-          thrust: ['SKEWER!', 'WHAM!'],
-          punch: ['POW!', 'BAM!', 'WHAP!'],
+          spike: ['CRACK!', 'KA-CHUNK!'],
+          thrust: ['SKEWER!', 'IMPALE!'],
+          punch: big ? ['POW!', 'HAYMAKER!'] : ['JAB!', 'JAB!'],
           slash: ['SLASH!', 'SHING!'],
         };
         const opts = words[fx] ?? ['POW!'];
-        bursts.push({ x: at.x, y: at.y - 6, t, word: opts[(i + ev.t) % opts.length]!, big });
+        let word = opts[(i + ev.t) % opts.length]!;
+        if (fx === 'punch' && !big && ev.t - lastPunch[ev.by]! < 25) word = '1-2!';
+        if (fx === 'punch') lastPunch[ev.by] = ev.t;
+        bursts.push({ x: at.x, y: at.y - 6, t, word, big: big || fx === 'spike' });
         sfx.pow(big);
         shake = Math.max(shake, big ? 6 : 3);
       }
@@ -840,6 +893,34 @@ export const createRenderer = (
           break;
         case 'flame':
           spawn(at.x, at.y, 3, ['#ffd23f', '#ff7a2f', '#5b5148'], 14, 0.5, 2, 0, -0.6, 0.5, 1);
+          burnUntil[victim] = t + 15; // set on fire
+          break;
+        case 'pellets':
+          // shotgun pellets pepper the whole body
+          for (let k = 0; k < 5; k++)
+            spawn(
+              at.x + (rng.next() - 0.5) * 18,
+              at.y + (rng.next() - 0.5) * 18,
+              2,
+              ['#ffffff', '#ffd23f'],
+              20,
+              0.25,
+              1
+            );
+          break;
+        case 'punch':
+          spawn(
+            at.x,
+            at.y,
+            big ? 12 : 6,
+            ['#ffffff', '#ffd23f'],
+            big ? 45 : 30,
+            0.25,
+            2,
+            foe.x > me.x ? 0.8 : -0.8,
+            0,
+            0.5
+          );
           break;
         case 'beam':
         case 'pulse':
@@ -1084,22 +1165,40 @@ export const createRenderer = (
           let windR = 0;
           let windL = 0;
           let crouch = 0;
-          const next = meleeTimes[i]!.find((mt) => mt > t - 1.5);
+          const next = meleeTimes[i]!.find((mt) => mt > t - 2.5);
           if (next !== undefined) {
             const slot = meleeSlotAt[`${i}:${next}`];
+            const mfx = FX_BY_PART[builds[i]!.parts[slot ?? 'weaponR']] ?? 'slash';
+            const st = MELEE_STYLE[mfx] ?? MELEE_STYLE.slash!;
             const until = next - t;
             let off = 0;
-            if (until > 0 && until <= WINDUP) {
-              const k = 1 - until / WINDUP;
-              off = -Math.round(k * 6); // pull back
-              crouch = Math.round(k * 2);
+            if (until > 0 && until <= st.windup) {
+              const k = 1 - until / st.windup;
+              off = -Math.round(k * st.back); // pull back
+              crouch = Math.round(k * (mfx === 'spike' ? 3 : mfx === 'punch' ? 1 : 2));
               const key = `${i}:${next}`;
-              if (!chargeSounded.has(key) && !quiet) {
+              if (!chargeSounded.has(key) && !quiet && mfx !== 'punch') {
                 chargeSounded.add(key);
-                sfx.charge();
+                if (mfx === 'spike') sfx.pileCharge();
+                else sfx.charge();
               }
+              // pile bunker: red-hot glow and venting steam while it locks
+              if (mfx === 'spike' && rng.chance(0.7))
+                spawn(
+                  x - facing[i]! * SW * 0.2,
+                  y - SH * 0.1,
+                  1,
+                  ['#ffffff', '#e8e2d4'],
+                  14,
+                  0.5,
+                  1,
+                  -facing[i]! * 0.6,
+                  -0.8,
+                  0.4,
+                  1
+                );
               // energy gathering at the fist
-              if (rng.chance(0.6)) {
+              if (mfx !== 'punch' && rng.chance(0.6)) {
                 const fx2 = x + facing[i]! * (SW * 0.35);
                 const fy2 = y + SH * 0.12;
                 const a = rng.next() * 6.283;
@@ -1114,8 +1213,8 @@ export const createRenderer = (
                   size: 1,
                 });
               }
-            } else if (until <= 0 && until > -1.5) {
-              off = Math.round(9 * (1 + until / 1.5)); // thrust out
+            } else if (until <= 0 && until > -st.hold) {
+              off = Math.round(st.out * (1 + until / st.hold)); // strike out, then recover
             }
             if (slot === 'weaponL') windL = off;
             else windR = off;
@@ -1157,6 +1256,77 @@ export const createRenderer = (
         g.restore();
       }
 
+      if (m.hp > 0) {
+        // rail gun charging: a growing cyan glow at the barrel right before it fires
+        const rail = railTimes[i]!.find((rt) => rt > t && rt - t <= 6);
+        if (rail !== undefined) {
+          const gp = gun({ x, y }, pos[1 - i]!, 'weaponR');
+          const k = 1 - (rail - t) / 6;
+          const r = 1 + Math.round(k * 4);
+          g.fillStyle = '#127475';
+          g.fillRect(Math.round(gp.x) - r - 1, Math.round(gp.y) - r - 1, r * 2 + 3, r * 2 + 3);
+          g.fillStyle = Math.floor(t * 8) % 2 === 0 ? '#3cf0ec' : '#ffffff';
+          g.fillRect(Math.round(gp.x) - r, Math.round(gp.y) - r, r * 2 + 1, r * 2 + 1);
+          if (rng.chance(0.7)) {
+            const a = rng.next() * 6.283;
+            particles.push({
+              x: gp.x + Math.cos(a) * 14,
+              y: gp.y + Math.sin(a) * 14,
+              vx: -Math.cos(a) * 60,
+              vy: -Math.sin(a) * 60,
+              life: 0.22,
+              max: 0.22,
+              colors: ['#ffffff', '#3cf0ec'],
+              size: 1,
+            });
+          }
+          const key = `${i}:${rail}`;
+          if (!railSounded.has(key) && !quiet) {
+            railSounded.add(key);
+            sfx.railCharge();
+          }
+        }
+        // orbit drone: always circling its owner
+        if (hasDrone[i]) {
+          const dp = dronePos(i, pos[i]!, t);
+          g.fillStyle = '#1b1a17';
+          g.fillRect(Math.round(dp.x) - 2, Math.round(dp.y) - 2, 5, 4);
+          g.fillStyle = Math.floor(t * 3) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
+          g.fillRect(Math.round(dp.x) - 1, Math.round(dp.y) - 1, 3, 2);
+        }
+        // set on fire by a flamer
+        if (t < burnUntil[i]! && rng.chance(0.6))
+          spawn(
+            x + (rng.next() - 0.5) * SW * 0.6,
+            y + (rng.next() - 0.2) * SH * 0.5,
+            1,
+            ['#ffd23f', '#ff7a2f', '#c0392b'],
+            12,
+            0.4,
+            2,
+            0,
+            -1,
+            0.3,
+            1
+          );
+        // the first time each weapon fires, name it so you learn what it looks like
+        let row = 0;
+        for (const slot of ['weaponR', 'weaponL', 'back'] as const) {
+          const f = firstFire.get(`${i}:${slot}`);
+          if (f === undefined || t < f || t > f + 14) continue;
+          const name = getPart(builds[i]!.parts[slot]).name.toUpperCase();
+          g.font = '8px Silkscreen, monospace';
+          g.textAlign = 'center';
+          g.textBaseline = 'top';
+          const w2 = Math.ceil(g.measureText(name).width) + 4;
+          const ty = Math.round(y + SH / 2 + 3 + row * 11);
+          g.fillStyle = '#1b1a17';
+          g.fillRect(Math.round(x - w2 / 2), ty - 1, w2, 10);
+          g.fillStyle = '#f8f4ec';
+          g.fillText(name, Math.round(x), ty);
+          row++;
+        }
+      }
       // Last Stand: golden invulnerability ring, then a stripped, sparking frame at 1 HP
       const ls = result.lastStands.find((l) => l.by === i && t >= l.t);
       if (ls && m.hp > 0) {
@@ -1315,6 +1485,18 @@ export const createRenderer = (
           g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
           break;
         }
+        case 'pistol': {
+          // double tap: two quick rounds
+          for (const lag of [0, 0.6]) {
+            const a2 = age - lag;
+            if (a2 < 0 || a2 > flight) continue;
+            const p = at(a2 / flight);
+            line(p.x - ux * 5, p.y - uy * 5, p.x, p.y, '#fff3b0');
+            g.fillStyle = '#ffffff';
+            g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+          }
+          break;
+        }
         case 'bullet': {
           if (age > flight) break;
           const p = at(age / flight);
@@ -1336,15 +1518,9 @@ export const createRenderer = (
           const dur = fx === 'beam' ? 2.2 : 1.4;
           if (age > dur) break;
           const fade = 1 - age / dur;
-          const src = fx === 'drone' ? { x: me.x + (foe.x < me.x ? 8 : -8), y: me.y - SPRITE_H * 0.55 } : from;
-          if (fx === 'drone') {
-            g.fillStyle = '#1b1a17';
-            g.fillRect(Math.round(src.x) - 2, Math.round(src.y) - 2, 5, 5);
-            g.fillStyle = '#3cf0ec';
-            g.fillRect(Math.round(src.x) - 1, Math.round(src.y) - 1, 3, 3);
-          }
+          const src = fx === 'drone' ? dronePos(ev.by, me, t) : from;
           g.globalAlpha = fade;
-          if (fx === 'beam') line(src.x, src.y, to.x, to.y, '#127475', 3);
+          if (fx === 'beam') line(src.x, src.y, to.x, to.y, '#127475', Math.floor(age * 10) % 2 === 0 ? 4 : 3);
           line(src.x, src.y, to.x, to.y, '#3cf0ec', fx === 'beam' ? 2 : 1);
           if (Math.floor(age * 8) % 2 === 0) line(src.x, src.y, to.x, to.y, '#ffffff', 1);
           g.globalAlpha = 1;

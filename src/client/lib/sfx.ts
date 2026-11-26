@@ -153,6 +153,93 @@ export const sfx = {
         break;
     }
   },
+  /** Every weapon has its own voice. */
+  weapon: (fx: string, side: 0 | 1) => {
+    const p = side === 0 ? 1 : 0.88;
+    const key = `w-${fx}-${side}`;
+    switch (fx) {
+      case 'tracer': // rifle: crisp crack
+        if (!throttle(key, 70)) return;
+        noise(0.06, 0.28, 3200 * p);
+        tone(260 * p, 90, 0.06, 'square', 0.08);
+        break;
+      case 'pistol': // pew-pew
+        if (!throttle(key, 120)) return;
+        tone(1300 * p, 500, 0.05, 'square', 0.07);
+        tone(1300 * p, 500, 0.05, 'square', 0.07, 0.08);
+        break;
+      case 'bullet': // buzz: brrrt
+        if (!throttle(key, 55)) return;
+        tone(95 * p, 85, 0.06, 'sawtooth', 0.07);
+        noise(0.04, 0.1, 2200);
+        break;
+      case 'pellets': // shotgun BLAM
+        if (!throttle(key, 150)) return;
+        noise(0.32, 0.5, 1600);
+        tone(140 * p, 40, 0.22, 'square', 0.16);
+        break;
+      case 'beam': // hum
+        if (!throttle(key, 160)) return;
+        tone(440 * p, 420, 0.3, 'sawtooth', 0.05);
+        tone(880 * p, 860, 0.3, 'sine', 0.05);
+        break;
+      case 'rail': // ZZRAK
+        if (!throttle(key, 200)) return;
+        noise(0.45, 0.45, 7000);
+        tone(2600 * p, 180, 0.4, 'sawtooth', 0.12);
+        break;
+      case 'pulse': // bwoop
+        if (!throttle(key, 120)) return;
+        tone(700 * p, 140, 0.2, 'sine', 0.16);
+        break;
+      case 'drone': // bip
+        if (!throttle(key, 100)) return;
+        tone(1900 * p, 1700, 0.04, 'square', 0.06);
+        break;
+      case 'flame': // whoosh-crackle
+        if (!throttle(key, 160)) return;
+        noise(0.28, 0.2, 2600);
+        break;
+      case 'missiles': // fwoosh x3
+        if (!throttle(key, 200)) return;
+        for (let k = 0; k < 3; k++) {
+          noise(0.25, 0.12, 3200, k * 0.07);
+          tone(400 * p, 1400, 0.25, 'triangle', 0.035, k * 0.07);
+        }
+        break;
+      case 'shell': // thump, then the whistle coming down
+        if (!throttle(key, 300)) return;
+        tone(110 * p, 40, 0.28, 'triangle', 0.22);
+        tone(2200, 500, 0.7, 'sine', 0.04, 0.15);
+        break;
+      case 'punch': // jab: short and snappy
+        if (!throttle(key, 80)) return;
+        tone(220 * p, 90, 0.06, 'square', 0.12);
+        noise(0.05, 0.25, 3500);
+        break;
+      case 'spike': // KA-CHUNK
+        tone(70 * p, 30, 0.35, 'square', 0.26);
+        noise(0.25, 0.45, 1400);
+        tone(1500, 1400, 0.05, 'square', 0.08, 0.12);
+        break;
+      case 'thrust': // lance: rushing air + thud
+        noise(0.3, 0.25, 5000);
+        tone(300 * p, 900, 0.15, 'sawtooth', 0.05);
+        break;
+      case 'slash': // shing
+        tone(3000 * p, 2000, 0.22, 'sine', 0.07);
+        tone(4200 * p, 3500, 0.16, 'sine', 0.04, 0.02);
+        noise(0.1, 0.15, 8000);
+        break;
+      default:
+        noise(0.06, 0.25, 3000);
+    }
+  },
+  railCharge: () => tone(300, 2400, 0.45, 'sine', 0.06),
+  pileCharge: () => {
+    noise(0.6, 0.1, 9000);
+    tone(80, 120, 0.6, 'square', 0.04);
+  },
   hit: (big: boolean) => {
     if (!throttle('hit', 60)) return;
     if (big) {

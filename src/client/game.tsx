@@ -420,6 +420,28 @@ export const App = () => {
     }
   };
 
+  /** Shoot at a target dummy that never fires back, to see what your weapons do. */
+  const testFire = () => {
+    fightCount.current += 1;
+    const dummy: Build = {
+      name: 'Target Dummy',
+      parts: { ...DEFAULT_BUILD.parts, legs: 'l-strider', core: 'c-ox', booster: 'b-puff', chip: 'p-kite' },
+      paint: { body: 6, trim: 1, decal: 0 },
+    };
+    const seed = `test:${fightCount.current}:${JSON.stringify(build.parts)}`;
+    const result = simulateBattle({ build, tax }, { build: dummy, tax, mods: { passive: true, hp: 1.4 } }, arena, seed);
+    setFight({
+      result,
+      builds: [build, dummy],
+      labels: ['test fire', 'never shoots back'],
+      tags: ['YOU', 'DUMMY'],
+      arena,
+      key: seed,
+      back: 'garage',
+    });
+    setScreen('battle');
+  };
+
   const replayShared = (f: SharedFight) => {
     const ar = getArena(f.arenaId);
     const result =
@@ -728,7 +750,14 @@ export const App = () => {
         )}
 
         {screen === 'garage' && (
-          <Garage build={build} arena={arena} tax={tax} onChange={setBuild} onBack={leaveGarage} />
+          <Garage
+            build={build}
+            arena={arena}
+            tax={tax}
+            onChange={setBuild}
+            onBack={leaveGarage}
+            onTestFire={testFire}
+          />
         )}
 
         {screen === 'practice' && (
