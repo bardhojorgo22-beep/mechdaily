@@ -52,7 +52,7 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
   velocity: {
     name: 'Terminal Velocity',
     blurb:
-      'Momentum builds while you move and drains when you get hit: more speed, dodge and fire rate. At full momentum: a crash ram that staggers, then you start slow again.',
+      'Momentum builds while you move and drains when you get hit: more speed and dodge. At full momentum: a crash ram that staggers, then you start slow again.',
   },
   redshift: {
     name: 'Redshift',
@@ -62,7 +62,7 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
 };
 
 /** Ticks a Redshift crash lasts after the burst ends. */
-export const REDSHIFT_CRASH = 6;
+export const REDSHIFT_CRASH = 4;
 
 /** After this tick, damage keeps rising so stalemates end. */
 export const OVERTIME_TICK = 500;
@@ -417,7 +417,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       if (stripped(me)) speed *= 1.2; // nothing left to carry
       if (me.s.behavior === 'velocity') {
         // momentum: crawl at first, build up while moving, ram at full speed
-        if (me.moving && tick >= me.ramUntil) me.momentum = Math.min(1, me.momentum + DT / 6);
+        if (me.moving && tick >= me.ramUntil) me.momentum = Math.min(1, me.momentum + DT / 7);
         speed *= 0.7 + 0.55 * me.momentum;
         if (me.momentum >= 1 && tick >= me.ramUntil && dist < 750 && dist > 90) {
           me.ramUntil = tick + 14;
@@ -646,8 +646,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           me.cooldown[w]! -
           (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1) -
           (active(me, 'redshift') ? 1 : 0) -
-          (stripped(me) && tick % 2 === 0 ? 1 : 0) -
-          (me.s.behavior === 'velocity' && me.momentum > 0.6 && tick % 3 === 0 ? 1 : 0);
+          (stripped(me) && tick % 2 === 0 ? 1 : 0);
         const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
         if (big && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
         if (me.cooldown[w]! > 0) return;
@@ -769,8 +768,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const t = mechs[p.target]!;
       if (invuln(t)) continue;
       t.hp -= p.dmg;
-      if (t.s.behavior === 'velocity' && p.dmg > 0)
-        t.momentum = Math.max(0, t.momentum - 0.06 - (p.dmg / t.s.hp) * 1.2);
+      if (t.s.behavior === 'velocity' && p.dmg > 0) t.momentum = Math.max(0, t.momentum - 0.08 - (p.dmg / t.s.hp) * 1.3);
       if (p.stagger > 0) {
         t.planted = Math.max(t.planted, p.stagger);
         t.ob = false;

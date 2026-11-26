@@ -511,7 +511,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'kinetic',
-      damage: 74,
+      damage: 70,
       minRange: 0,
       maxRange: 816,
       cooldown: 10,
@@ -530,7 +530,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'kinetic',
-      damage: 165,
+      damage: 155,
       minRange: 120,
       maxRange: 1300,
       cooldown: 28,
