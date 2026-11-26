@@ -6,12 +6,15 @@ import type {
   InitResponse,
   LeaderboardResponse,
   RaidResponse,
+  ChallengeResponse,
+  ChallengesResponse,
   ResultsResponse,
 } from '../../shared/api';
 import { arenaForDay } from '../../shared/game/arenas';
 import { isFactionId } from '../../shared/game/factions';
 import { validateBuild } from '../../shared/game/mech';
 import { attackBoss, raidState } from '../core/raid';
+import { challenge, listChallenges, rememberUser } from '../core/challenge';
 import {
   dayNumberOf,
   dayPost,
@@ -48,6 +51,7 @@ api.get('/init', async (c) => {
     const { day, dayNumber } = await ensureState();
     const { userId, username, postId } = context;
     const pDay = (postId && (await postDay(postId))) || day;
+    if (userId && username) await rememberUser(userId, username);
     const profile = userId ? await getProfile(userId) : null;
     const res: InitResponse = {
       type: 'init',
@@ -72,6 +76,8 @@ api.get('/init', async (c) => {
         titles: profile?.titles ?? 0,
         streak: profile?.streak ?? 0,
         bestStreak: profile?.bestStreak ?? 0,
+        chalWins: profile?.chalWins ?? 0,
+        chalLosses: profile?.chalLosses ?? 0,
       },
       champions: await getChampions(),
       last: await lastResultFor(day, userId),
@@ -129,6 +135,28 @@ api.post('/raid', async (c) => {
     max: r.max,
     lastHit: r.lastHit,
   };
+  return c.json(res);
+});
+
+api.post('/challenge', async (c) => {
+  const { userId, username } = context;
+  if (!userId || !username) return c.json(err('Log in to challenge someone.'), 401);
+  const body: unknown = await c.req.json().catch(() => null);
+  const build = validateBuild(body && typeof body === 'object' ? Reflect.get(body, 'build') : null);
+  const target: unknown = body && typeof body === 'object' ? Reflect.get(body, 'username') : null;
+  if (!build || typeof target !== 'string') return c.json(err('Bad challenge.'), 400);
+  const { day } = await ensureState();
+  await rememberUser(userId, username);
+  await saveBuild(userId, build);
+  const r = await challenge(day, await getTax(day), userId, username, build, target);
+  if (!r.ok) return c.json(err(r.message), r.status);
+  const res: ChallengeResponse = { type: 'challenge', record: r.record, left: r.left };
+  return c.json(res);
+});
+
+api.get('/challenges', async (c) => {
+  const { day } = await ensureState();
+  const res: ChallengesResponse = { type: 'challenges', list: await listChallenges(day) };
   return c.json(res);
 });
 

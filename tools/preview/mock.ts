@@ -31,7 +31,7 @@ const init = {
   faction: new URLSearchParams(location.search).has('nofaction') ? null : 'tide',
   factionTotals: { foundry: 42, tide: 57, static: 31 },
   factionToday: { foundry: 5, tide: 6, static: 3 },
-  profile: { entries: 3, wins: 5, titles: 0, streak: 3, bestStreak: 3 },
+  profile: { entries: 3, wins: 5, titles: 0, streak: 3, bestStreak: 3, chalWins: 2, chalLosses: 1 },
   champions: champs.map((b, i) => ({
     day: `2026-11-2${i}`,
     dayNumber: 1 - i,
@@ -77,6 +77,14 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
       pilots: [
         { username: 'DunhillGri', wins: 5 },
         { username: 'other', wins: 3 },
+      ],
+    });
+  if (url.startsWith('/api/challenges'))
+    return json({
+      type: 'challenges',
+      list: [
+        { seed: 'c1', arenaId: 'mud', aPilot: 'DunhillGri', bPilot: 'other', aBuild: { ...DEFAULT_BUILD, name: 'Kettle Prime' }, bBuild: champs[0], winner: 0, at: 1 },
+        { seed: 'c2', arenaId: 'mud', aPilot: 'someone', bPilot: 'DunhillGri', aBuild: champs[1], bBuild: { ...DEFAULT_BUILD, name: 'Kettle Prime' }, winner: 0, at: 2 },
       ],
     });
   if (url.startsWith('/api/raid'))

@@ -4,7 +4,7 @@ import './index.css';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { context, navigateTo, showToast } from '@devvit/web/client';
-import type { InitResponse, LeaderboardResponse, RaidState, ResultsResponse } from '../shared/api';
+import type { ChallengeRecord, InitResponse, LeaderboardResponse, RaidState, ResultsResponse } from '../shared/api';
 import { getArena, type Arena } from '../shared/game/arenas';
 import { simulateBattle, type BattleResult } from '../shared/game/battle';
 import { botsForDay } from '../shared/game/bots';
@@ -30,7 +30,7 @@ type Fight = {
   footer?: ReactNode;
   back: Screen;
 };
-type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions';
+type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions' | 'challenge';
 
 const postUrl = (postId: string) =>
   `https://www.reddit.com/r/${context.subredditName}/comments/${postId.replace(/^t3_/, '')}`;
@@ -227,6 +227,8 @@ export const App = () => {
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [board, setBoard] = useState<LeaderboardResponse | null>(null);
+  const [chals, setChals] = useState<ChallengeRecord[] | null>(null);
+  const [rival, setRival] = useState('');
   const [, setNow] = useState(0);
   const fightCount = useRef(0);
 
@@ -363,6 +365,47 @@ export const App = () => {
     }
   };
 
+  const watchChallenge = (c: ChallengeRecord) => {
+    const ar = getArena(c.arenaId);
+    const result = simulateBattle({ build: c.aBuild, tax }, { build: c.bBuild, tax }, ar, c.seed);
+    const me = data?.username;
+    setFight({
+      result,
+      builds: [c.aBuild, c.bBuild],
+      labels: [`u/${c.aPilot}`, `u/${c.bPilot}`],
+      tags: [c.aPilot === me ? 'YOU' : 'A', c.bPilot === me ? 'YOU' : 'B'],
+      arena: ar,
+      key: c.seed,
+      back: 'challenge',
+    });
+    setScreen('battle');
+  };
+
+  const openChallenges = async (prefill?: string) => {
+    if (prefill !== undefined) setRival(prefill);
+    setScreen('challenge');
+    try {
+      setChals((await api.challenges()).list);
+    } catch {
+      setChals([]);
+    }
+  };
+
+  const sendChallenge = async () => {
+    if (!rival.trim()) return;
+    setBusy(true);
+    try {
+      const r = await api.challenge(rival, build);
+      setChals((prev) => [r.record, ...(prev ?? [])]);
+      showToast(`${r.left} challenge${r.left === 1 ? '' : 's'} left today`);
+      watchChallenge(r.record);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Challenge failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openBracket = async (day: string) => {
     setScreen('bracket');
     setResults(null);
@@ -475,6 +518,9 @@ export const App = () => {
                 </button>
                 <button className="btn bg-teal text-sm" onClick={() => setScreen('practice')}>
                   Practice fight
+                </button>
+                <button className="btn bg-sun text-sm" onClick={() => void openChallenges()}>
+                  Challenge a redditor
                 </button>
               </div>
             </div>
@@ -636,6 +682,69 @@ export const App = () => {
           </>
         )}
 
+        {screen === 'challenge' && (
+          <>
+            <div className="flex items-center gap-2">
+              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
+                ← Back
+              </button>
+              <div className="font-display text-2xl">Challenges</div>
+            </div>
+            <div className="sticker p-3 flex flex-col gap-2">
+              <div className="text-xs">
+                Fight another pilot's mech in today's arena ({arena.name}). The result gets posted in the comments so
+                they'll see it. 5 per day.
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 min-w-0 border-ink bg-white px-2 py-1 text-sm"
+                  style={{ borderWidth: 3, borderStyle: 'solid' }}
+                  placeholder="u/username"
+                  value={rival}
+                  onChange={(e) => setRival(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void sendChallenge();
+                  }}
+                  aria-label="Username to challenge"
+                />
+                <button
+                  className="btn bg-rust text-white text-sm"
+                  disabled={busy || !data.username || !rival.trim()}
+                  onClick={() => void sendChallenge()}
+                >
+                  Fight
+                </button>
+              </div>
+              {(data.profile.chalWins > 0 || data.profile.chalLosses > 0) && (
+                <div className="text-[11px] text-mute">
+                  Your record: {data.profile.chalWins}W – {data.profile.chalLosses}L
+                </div>
+              )}
+            </div>
+            <div className="text-[11px] font-semibold text-mute">TODAY'S CHALLENGES</div>
+            {!chals && <div className="text-xs">Loading…</div>}
+            {chals && chals.length === 0 && <div className="text-xs">No challenges yet today. Start some drama.</div>}
+            {chals?.map((c) => (
+              <button
+                key={c.seed}
+                className="sticker px-2 py-1.5 flex items-center gap-2 text-left text-sm"
+                onClick={() => watchChallenge(c)}
+              >
+                <PixelMech build={c.aBuild} size={34} />
+                <span className={`flex-1 truncate ${c.winner === 0 ? 'font-semibold' : 'text-mute'}`}>
+                  u/{c.aPilot}
+                </span>
+                <span className="text-[10px]">vs</span>
+                <span className={`flex-1 truncate text-right ${c.winner === 1 ? 'font-semibold' : 'text-mute'}`}>
+                  u/{c.bPilot}
+                </span>
+                <PixelMech build={c.bBuild} size={34} flip />
+                <span className="font-display">▶</span>
+              </button>
+            ))}
+          </>
+        )}
+
         {screen === 'factions' && (
           <>
             <div className="flex items-center gap-2">
@@ -658,11 +767,16 @@ export const App = () => {
               {!board && <div className="text-xs">Loading…</div>}
               {board && board.pilots.length === 0 && <div className="text-xs">No winners yet. Be the first.</div>}
               {board?.pilots.map((p, i) => (
-                <div key={p.username} className="flex justify-between text-sm py-0.5">
-                  <span>
+                <div key={p.username} className="flex justify-between items-center gap-2 text-sm py-0.5">
+                  <span className="flex-1 truncate">
                     {i + 1}. u/{p.username}
                   </span>
                   <span className="font-semibold">{p.wins}</span>
+                  {p.username !== data.username && (
+                    <button className="tag bg-sun py-0.5" onClick={() => void openChallenges(p.username)}>
+                      ⚔ fight
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

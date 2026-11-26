@@ -96,6 +96,8 @@ export const getProfile = async (
     titles: n('titles'),
     streak: n('streak'),
     bestStreak: n('bestStreak'),
+    chalWins: n('chalWins'),
+    chalLosses: n('chalLosses'),
     faction: isFactionId(f) ? f : null,
     lastEntryDay: h.lastEntryDay ?? null,
   };

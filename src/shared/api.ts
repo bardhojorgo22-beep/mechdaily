@@ -16,6 +16,8 @@ export type Profile = {
   titles: number;
   streak: number;
   bestStreak: number;
+  chalWins: number;
+  chalLosses: number;
 };
 
 export type LastResult = {
@@ -27,6 +29,19 @@ export type LastResult = {
   /** null if you didn't enter that day */
   mine: { wins: number; rounds: number; champion: boolean } | null;
 };
+
+export type ChallengeRecord = {
+  seed: string;
+  arenaId: string;
+  aPilot: string;
+  bPilot: string;
+  aBuild: Build;
+  bBuild: Build;
+  winner: 0 | 1;
+  at: number;
+};
+export type ChallengeResponse = { type: 'challenge'; record: ChallengeRecord; left: number };
+export type ChallengesResponse = { type: 'challenges'; list: ChallengeRecord[] };
 
 export type RaidState = {
   bossId: string;

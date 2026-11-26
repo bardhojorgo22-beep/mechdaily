@@ -1,4 +1,12 @@
-import type { EnterResponse, InitResponse, LeaderboardResponse, RaidResponse, ResultsResponse } from '../../shared/api';
+import type {
+  ChallengeResponse,
+  ChallengesResponse,
+  EnterResponse,
+  InitResponse,
+  LeaderboardResponse,
+  RaidResponse,
+  ResultsResponse,
+} from '../../shared/api';
 import type { FactionId } from '../../shared/game/factions';
 import type { Build } from '../../shared/game/mech';
 
@@ -35,6 +43,9 @@ export const api = {
       body: JSON.stringify({ faction }),
     }),
   raid: (build: Build) => call<RaidResponse>('/api/raid', { method: 'POST', body: JSON.stringify({ build }) }),
+  challenge: (username: string, build: Build) =>
+    call<ChallengeResponse>('/api/challenge', { method: 'POST', body: JSON.stringify({ username, build }) }),
+  challenges: () => call<ChallengesResponse>('/api/challenges'),
   results: (day: string) => call<ResultsResponse>(`/api/results/${day}`),
   leaderboard: () => call<LeaderboardResponse>('/api/leaderboard'),
 };
