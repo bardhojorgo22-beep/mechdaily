@@ -18,6 +18,7 @@ export type ShotEvent = {
   dmg: number;
   blocked: boolean;
   crit?: boolean; // charged sniper shot
+  dodged?: boolean; // missed because the target was mid quick-boost
 };
 
 /** Once-per-fight pilot chip special moves. */
@@ -504,6 +505,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           dmg: Math.round(dmg),
           blocked,
           ...(crit ? { crit: true } : {}),
+          ...(!hit && foe.qbUntil > tick ? { dodged: true } : {}),
         });
       });
     }

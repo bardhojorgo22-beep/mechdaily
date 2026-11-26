@@ -7,6 +7,7 @@ import { getPart } from '../../shared/game/parts';
 import type { MechLayer } from '../components/mechLayers';
 import { createRng } from '../../shared/game/rng';
 import { sfx } from './sfx';
+import type { Highlight } from './highlights';
 
 export const RES_W = 360;
 export const SPRITE_W = 42;
@@ -311,6 +312,8 @@ export type Renderer = {
   draw: (t: number, dt: number) => boolean;
   /** Seconds of hit-stop requested by big impacts; the caller pauses sim time. */
   takeFreeze: () => number;
+  /** Slow-motion factor requested by highlight moments (1 = normal). */
+  timeScale: () => number;
 };
 
 export const createRenderer = (
@@ -321,7 +324,9 @@ export const createRenderer = (
   sprites: { current: MechSprites[] },
   getTags: () => [string, string],
   getSpeed: () => number,
-  bossSide: 0 | 1 | null = null
+  bossSide: 0 | 1 | null = null,
+  highlights: Highlight[] = [],
+  onHighlight: (h: Highlight) => void = () => undefined
 ): Renderer | null => {
   const sw = [0, 1].map((i) => (i === bossSide ? BOSS_SPRITE_W : SPRITE_W));
   const sh = sw.map((w) => Math.round((w * 220) / 200));
@@ -329,9 +334,23 @@ export const createRenderer = (
   const H = Math.round((RES_W * arena.height) / arena.width);
   canvas.width = W;
   canvas.height = H;
-  const g = canvas.getContext('2d');
+  const out = canvas.getContext('2d');
+  if (!out) return null;
+  out.imageSmoothingEnabled = false;
+  // Everything is drawn to an offscreen scene, then blitted through a camera
+  // that can zoom in on big moments.
+  const scene = document.createElement('canvas');
+  scene.width = W;
+  scene.height = H;
+  const g = scene.getContext('2d');
   if (!g) return null;
   g.imageSmoothingEnabled = false;
+  const cam = { zoom: 1, x: W / 2, y: H / 2, target: 1, until: 0, focus: 0 as 0 | 1 };
+  let slowUntil = 0; // performance.now() ms
+  let slowFactor = 1;
+  let nextHighlight = 0;
+  let ring = 0; // colored screen-edge pulse
+  let ringColor = '#ffc914';
   const sc = W / arena.width;
   const theme = THEMES[arena.id] ?? THEMES.yard!;
   const rng = createRng('fx');
@@ -478,6 +497,28 @@ export const createRenderer = (
       return 4 * ph * (1 - ph) * 9;
     };
     const quiet = getSpeed() > 2;
+
+    // ── highlight moments: callouts, zoom, slow-mo, crowd ──
+    while (nextHighlight < highlights.length && highlights[nextHighlight]!.t <= t) {
+      const h = highlights[nextHighlight++]!;
+      if (t - h.t > 15 && h.tier < 3) continue;
+      const mine = getTags()[h.by] === 'YOU';
+      onHighlight(h);
+      if (h.tier >= 2) {
+        cam.target = h.tier === 3 ? 2 : 1.6;
+        cam.focus = h.focus;
+        cam.until = t + (h.tier === 3 ? 40 : 9);
+        slowFactor = h.tier === 3 ? 0.3 : 0.35;
+        slowUntil = performance.now() + (h.tier === 3 ? 1400 : 850);
+      }
+      ring = h.tier === 1 ? 0.35 : 0.8;
+      ringColor = mine
+        ? '#ffc914'
+        : getTags()[h.by] === 'BOSS' || getTags()[1 - h.by] === 'YOU'
+          ? '#e4572e'
+          : '#f8f4ec';
+      if (!quiet || h.tier === 3) sfx.hype(h.tier, mine || getTags()[0] !== 'YOU');
+    }
 
     // ── boosting: quick boosts, overboost, exhaust ──
     while (nextMove < result.moves.length && result.moves[nextMove]!.t <= t) {
@@ -888,9 +929,10 @@ export const createRenderer = (
         const rc = recoil[i]!;
         const kickBack = t < rc.until ? Math.round(rc.px * ((rc.until - t) / (rc.px > 2 ? 1.5 : 0.7))) : 0;
         const fl = flinch[i]!;
-        const flinchPx = t < fl.until ? Math.round(2 * ((fl.until - t) / 1.4) + 0.5) * fl.dir : 0;
+        const flinchPx = t < fl.until ? Math.round(5 * ((fl.until - t) / 1.4) + 0.5) * fl.dir : 0;
         g.translate(x - facing[i]! * kickBack + flinchPx, y + bobY);
         if (facing[i] === -1) g.scale(-1, 1);
+        if (t < qbUntil[i]! && qbUntil[i]! - t > 2) g.scale(1.18, 0.88); // squash-and-stretch on the dash
         if (m.hp <= 0) g.globalAlpha = 0.35;
         const flashing = t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0;
         if (!sp) {
@@ -905,33 +947,33 @@ export const createRenderer = (
           const oy = -SH / 2;
           const v = vel[i]!;
           const fwd = (v.x * facing[i]!) / Math.max(1, topSpeed[i]!);
-          const lean = m.moving ? Math.max(-1, Math.min(2, Math.round(fwd * (v.ratio > 1.3 ? 2.5 : 1.5)))) : 0;
+          const lean = m.moving ? Math.max(-2, Math.min(5, Math.round(fwd * (v.ratio > 1.3 ? 5 : 3)))) : 0;
           const step = Math.floor(walked[i]! / 6) % 2;
           const walking = m.moving && (leg === 'biped' || leg === 'reverse' || leg === 'quad');
-          const torsoBob = walking && step === 1 ? -1 : 0;
-          const aiming = t - lastShot[i]! < 14 ? -1 : 0;
+          const torsoBob = walking && step === 1 ? -2 : 0;
+          const aiming = t - lastShot[i]! < 14 ? -3 : 0;
           const kickOf = (slot: ShotEvent['slot']) => {
             const k = slotKick[i]![slot] - t;
-            return k > 0 ? Math.ceil(Math.min(3, k * 2.2)) : 0;
+            return k > 0 ? Math.ceil(Math.min(6, k * 4)) : 0;
           };
           const backK = kickOf('back');
           const rK = kickOf('weaponR');
           const lK = kickOf('weaponL');
-          if (L.back) g.drawImage(L.back, ox + lean - backK, oy + torsoBob + Math.min(1, backK));
+          if (L.back) g.drawImage(L.back, ox + lean - backK, oy + torsoBob + Math.min(3, backK));
           if (L.legs) {
             if (walking) {
               // left and right halves step out of phase
               const half = Math.floor(L.legs.width / 2);
               const lh = L.legs.height;
-              g.drawImage(L.legs, 0, 0, half, lh, ox, oy + (step === 0 ? -1 : 0), half, lh);
+              g.drawImage(L.legs, 0, 0, half, lh, ox - (step === 0 ? 1 : 0), oy + (step === 0 ? -2 : 0), half, lh);
               g.drawImage(
                 L.legs,
                 half,
                 0,
                 L.legs.width - half,
                 lh,
-                ox + half,
-                oy + (step === 1 ? -1 : 0),
+                ox + half + (step === 1 ? 1 : 0),
+                oy + (step === 1 ? -2 : 0),
                 L.legs.width - half,
                 lh
               );
@@ -1289,8 +1331,35 @@ export const createRenderer = (
     }
     g.restore();
 
+    // ── camera ──
+    if (t > cam.until) cam.target = 1;
+    const f = pos[cam.focus]!;
+    const k = Math.min(1, dt * (cam.target > cam.zoom ? 9 : 3));
+    cam.zoom += (cam.target - cam.zoom) * k;
+    cam.x += ((cam.zoom > 1.02 ? f.x : W / 2) - cam.x) * k;
+    cam.y += ((cam.zoom > 1.02 ? f.y - 6 : H / 2) - cam.y) * k;
+    const vw = W / cam.zoom;
+    const vh = H / cam.zoom;
+    const sx = Math.max(0, Math.min(W - vw, cam.x - vw / 2));
+    const sy = Math.max(0, Math.min(H - vh, cam.y - vh / 2));
+    out.clearRect(0, 0, W, H);
+    out.drawImage(scene, sx, sy, vw, vh, 0, 0, W, H);
+    if (ring > 0) {
+      out.globalAlpha = Math.min(1, ring);
+      out.fillStyle = ringColor;
+      const b = 3;
+      out.fillRect(0, 0, W, b);
+      out.fillRect(0, H - b, W, b);
+      out.fillRect(0, 0, b, H);
+      out.fillRect(W - b, 0, b, H);
+      out.globalAlpha = 1;
+      ring -= dt * 1.6;
+    }
+
     lastT = t;
-    return particles.length > 0 || pieces.length > 0 || shake > 0.2 || flash > 0;
+    return (
+      particles.length > 0 || pieces.length > 0 || shake > 0.2 || flash > 0 || Math.abs(cam.zoom - 1) > 0.01 || ring > 0
+    );
   };
 
   return {
@@ -1300,5 +1369,6 @@ export const createRenderer = (
       freeze = 0;
       return f;
     },
+    timeScale: () => (performance.now() < slowUntil ? slowFactor : 1),
   };
 };

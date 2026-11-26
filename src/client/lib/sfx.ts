@@ -186,6 +186,25 @@ export const sfx = {
   },
   win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.14, 'square', 0.14, i * 0.11)),
   lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, f * 0.98, 0.18, 'triangle', 0.16, i * 0.14)),
+  /** Crowd + stinger for highlight moments. good = it's your mech doing it. */
+  hype: (tier: 1 | 2 | 3, good: boolean) => {
+    if (!throttle(`hype-${tier}`, 400)) return;
+    const crowd = (dur: number, vol: number, delay = 0) => {
+      // a crowd is a lot of noise through a vocal-ish band
+      noise(dur, vol, 1400, delay);
+      noise(dur * 0.8, vol * 0.6, 900, delay + 0.05);
+    };
+    if (good) {
+      if (tier === 1) [660, 990].forEach((f, i) => tone(f, f, 0.08, 'square', 0.1, i * 0.06));
+      else {
+        [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, 0.09, 'square', 0.12, i * 0.05));
+        crowd(tier === 3 ? 1.8 : 1.1, tier === 3 ? 0.5 : 0.35, 0.05);
+      }
+    } else {
+      [330, 247].forEach((f, i) => tone(f, f * 0.94, 0.14, 'triangle', 0.12, i * 0.1));
+      if (tier >= 2) crowd(0.6, 0.18);
+    }
+  },
   qb: (side: 0 | 1) => {
     if (!throttle(`qb-${side}`, 90)) return;
     noise(0.18, 0.32, side === 0 ? 2600 : 2100);

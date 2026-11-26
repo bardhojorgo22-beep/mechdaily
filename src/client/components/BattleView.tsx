@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Arena } from '../../shared/game/arenas';
 import { TICKS_PER_SECOND, type BattleResult } from '../../shared/game/battle';
 import type { Build } from '../../shared/game/mech';
@@ -14,6 +14,7 @@ import {
 import { MECH_LAYERS } from './mechLayers';
 import { isMuted, onMuteChange, setMuted, sfx } from '../lib/sfx';
 import { mechSprite } from '../lib/sprite';
+import { findHighlights, fightStats, type Highlight } from '../lib/highlights';
 import { PixelMech } from './PixelMech';
 
 const INTRO_MS = 2200;
@@ -46,6 +47,26 @@ const whiteOf = (src: HTMLCanvasElement) => {
   return c;
 };
 
+const Reel = ({ result, side }: { result: BattleResult; side: 0 | 1 }) => {
+  const st = fightStats(result, side);
+  const cells = [
+    ['BIGGEST HIT', `${st.biggestHit}`],
+    ['DODGES', `${st.dodges}`],
+    ['ACCURACY', `${Math.round(st.accuracy * 100)}%`],
+    ['BEST COMBO', `x${st.bestCombo}`],
+  ];
+  return (
+    <div className="grid grid-cols-4 gap-1 mt-3">
+      {cells.map(([k, v]) => (
+        <div key={k} className="border-2 border-ink bg-white py-1">
+          <div className="font-display text-lg leading-none">{v}</div>
+          <div className="text-[8px] font-semibold text-mute mt-0.5">{k}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const BattleView = ({
   result,
   builds,
@@ -62,6 +83,9 @@ export const BattleView = ({
   const [intro, setIntro] = useState<string | null>('3');
   const [muted, setMutedState] = useState(isMuted());
   const tickRef = useRef(0);
+  const highlights = useMemo(() => findHighlights(result), [result]);
+  const [callouts, setCallouts] = useState<(Highlight & { id: number })[]>([]);
+  const calloutId = useRef(0);
   const speedRef = useRef(1);
   const tagsRef = useRef(tags);
   const sprites = useRef<MechSprites[]>([]);
@@ -125,7 +149,16 @@ export const BattleView = ({
       sprites,
       () => tagsRef.current,
       () => speedRef.current,
-      bossSide
+      bossSide,
+      highlights,
+      (h) => {
+        const id = ++calloutId.current;
+        setCallouts((cs) => [...cs.slice(-2), { ...h, id }]);
+        setTimeout(
+          () => setCallouts((cs) => cs.filter((c) => c.id !== id)),
+          h.tier === 3 ? 3200 : h.tier === 2 ? 1700 : 1200
+        );
+      }
     );
     if (!renderer) return;
     let raf = 0;
@@ -138,7 +171,7 @@ export const BattleView = ({
       hold = Math.max(hold - dt, 0);
       const playing = (now - started > INTRO_MS || tickRef.current > 0) && hold <= 0;
       const left = result.ticks - tickRef.current;
-      const slow = result.reason === 'ko' && left < 10 ? 0.3 : 1;
+      const slow = (result.reason === 'ko' && left < 10 ? 0.3 : 1) * renderer.timeScale();
       if (playing && tickRef.current < result.ticks) {
         tickRef.current = Math.min(result.ticks, tickRef.current + dt * TICKS_PER_SECOND * speedRef.current * slow);
         setTick(tickRef.current);
@@ -149,7 +182,7 @@ export const BattleView = ({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [result, builds, arena, bossSide]);
+  }, [result, builds, arena, bossSide, highlights]);
 
   const fr = frameAt(result, tick);
   const secs = Math.floor(tick / TICKS_PER_SECOND);
@@ -224,6 +257,42 @@ export const BattleView = ({
             </div>
           </div>
         )}
+        {callouts.map((c, k) => {
+          const mine = tags[c.by] === 'YOU';
+          const enemyOfYou = tags[c.by === 0 ? 1 : 0] === 'YOU';
+          const color = mine ? '#ffc914' : enemyOfYou ? '#ff6b4a' : '#f8f4ec';
+          const big = c.tier >= 2;
+          return (
+            <div
+              key={c.id}
+              className="absolute inset-x-0 flex flex-col items-center pointer-events-none"
+              style={{ top: c.tier === 3 ? '30%' : `${12 + k * 18}%` }}
+            >
+              <div
+                className="font-display stamp whitespace-nowrap"
+                style={{
+                  fontSize: c.tier === 3 ? 'min(11vw, 46px)' : big ? 'min(8vw, 32px)' : 'min(6vw, 22px)',
+                  color,
+                  transform: `rotate(${c.by === 0 ? -4 : 4}deg)`,
+                  textShadow: '3px 3px 0 #1b1a17, -2px -2px 0 #1b1a17, 2px -2px 0 #1b1a17, -2px 2px 0 #1b1a17',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {c.text}
+              </div>
+              {(c.sub || big) && (
+                <div className="font-display text-xs mt-1 px-2 py-0.5" style={{ background: '#1b1a17', color }}>
+                  {c.sub ? `${c.sub} · ` : ''}
+                  {tags[c.by] === 'YOU'
+                    ? 'YOUR MECH'
+                    : tags[c.by] === 'BOSS'
+                      ? 'THE BOSS'
+                      : builds[c.by]!.name.toUpperCase()}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {!done ? (
@@ -259,6 +328,7 @@ export const BattleView = ({
       ) : footer ? (
         <div className="sticker p-3 text-center">
           {footer}
+          <Reel result={result} side={0} />
           {onDone && (
             <button className="btn bg-sun mt-3 w-full" onClick={onDone}>
               Continue
@@ -277,6 +347,7 @@ export const BattleView = ({
             {result.reason === 'ko' ? 'Knockout' : 'Time ran out — more HP left wins'} · {Math.round(result.ticks / 10)}
             s · damage {result.damage[0]} vs {result.damage[1]}
           </div>
+          <Reel result={result} side={0} />
           {onDone && (
             <button className="btn bg-sun mt-3 w-full" onClick={onDone}>
               Continue
