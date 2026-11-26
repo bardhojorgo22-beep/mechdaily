@@ -1,9 +1,10 @@
 import { redis } from '@devvit/web/server';
 import type { RaidState } from '../../shared/api';
 import { getArena, arenaForDay } from '../../shared/game/arenas';
-import { RAID_ATTEMPTS, bossForDay, raidPoolFor, raidSeed, simulateRaid } from '../../shared/game/boss';
+import { bossForDay, raidPoolFor, raidSeed, simulateRaid } from '../../shared/game/boss';
 import { FACTION_IDS, type FactionId } from '../../shared/game/factions';
 import type { Build, Tax } from '../../shared/game/mech';
+import { raidAttempts } from './limits';
 
 const R = {
   state: (day: string) => `raid:${day}`, // hash: hp, max, killedBy
@@ -39,7 +40,7 @@ export const raidState = async (
     hp: Math.max(0, Number(h.hp ?? '0')),
     max: Number(h.max ?? '1'),
     killedBy: h.killedBy ?? null,
-    attemptsLeft: Math.max(0, RAID_ATTEMPTS - used),
+    attemptsLeft: Math.max(0, raidAttempts() - used),
     myDamage: Math.round(mine),
     top: top.map((m) => ({ username: m.member, damage: Math.round(m.score) })),
     factions: { foundry: Number(fac.foundry ?? 0), tide: Number(fac.tide ?? 0), static: Number(fac.static ?? 0) },
@@ -60,7 +61,7 @@ export const attackBoss = async (
 ): Promise<RaidAttack> => {
   await ensureRaid(day);
   const used = await redis.hIncrBy(R.attempts(day), userId, 1);
-  if (used > RAID_ATTEMPTS) {
+  if (used > raidAttempts()) {
     await redis.hIncrBy(R.attempts(day), userId, -1);
     return { ok: false, message: `No attacks left today. Come back tomorrow.` };
   }

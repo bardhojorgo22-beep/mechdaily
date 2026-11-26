@@ -5,7 +5,7 @@ import { simulateBattle } from '../../shared/game/battle';
 import { validateBuild, type Build, type Tax } from '../../shared/game/mech';
 import { parseJson } from './state';
 
-export const CHALLENGES_PER_DAY = 5;
+import { challengesPerDay } from './limits';
 
 const C = {
   byName: 'user:byname', // hash lowercased username -> userId
@@ -79,9 +79,9 @@ export const challenge = async (
   if (!theirs) return { ok: false, status: 404, message: `u/${name} hasn't built a mech here yet.` };
 
   const used = await redis.hIncrBy(C.count(day), userId, 1);
-  if (used > CHALLENGES_PER_DAY) {
+  if (used > challengesPerDay()) {
     await redis.hIncrBy(C.count(day), userId, -1);
-    return { ok: false, status: 429, message: `That's ${CHALLENGES_PER_DAY} challenges today. Rest your servos.` };
+    return { ok: false, status: 429, message: `That's ${challengesPerDay()} challenges today. Rest your servos.` };
   }
 
   const targetName = (await redis.hGet(C.names, targetId)) ?? name;
@@ -121,5 +121,5 @@ export const challenge = async (
       console.error('challenge comment failed', e, context.subredditName);
     }
   }
-  return { ok: true, record, left: CHALLENGES_PER_DAY - used };
+  return { ok: true, record, left: challengesPerDay() - used };
 };
