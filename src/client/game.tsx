@@ -900,12 +900,18 @@ const Bracket = ({
                 >
                   <span className={`flex-1 truncate ${m.w === m.a ? 'font-semibold' : 'text-mute line-through'}`}>
                     {t.entrants[m.a]!.build.name}
+                    {!t.entrants[m.a]!.bot && (
+                      <span className="block text-[10px] font-normal no-underline">u/{t.entrants[m.a]!.pilot}</span>
+                    )}
                   </span>
                   <span className="text-[10px]">vs</span>
                   <span
                     className={`flex-1 truncate text-right ${m.w === m.b ? 'font-semibold' : 'text-mute line-through'}`}
                   >
                     {t.entrants[m.b]!.build.name}
+                    {!t.entrants[m.b]!.bot && (
+                      <span className="block text-[10px] font-normal no-underline">u/{t.entrants[m.b]!.pilot}</span>
+                    )}
                   </span>
                   <span className="font-display font-black">▶</span>
                 </button>

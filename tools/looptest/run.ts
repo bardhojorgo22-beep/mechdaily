@@ -122,6 +122,14 @@ check(
   'Day 3 post created'
 );
 
+// 6. a stray post opened on a day that already has a post just shows today, without stealing it
+as('joani', 't3_orphan');
+const orphan = await req('/init');
+check(
+  orphan.json.postDay === orphan.json.day && orphan.json.todayPostId === 't3_post3',
+  'stray post shows today, real post kept'
+);
+
 console.log('\n── what Reddit would see ──');
 for (const l of log) console.log(l);
 console.log(`\n${fails ? `${fails} FAILED` : 'ALL PASSED'}`);

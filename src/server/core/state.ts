@@ -71,6 +71,11 @@ export const getTax = async (day: string): Promise<Tax> => {
 export const postDay = async (postId: string): Promise<string | null> => (await redis.hGet(K.postDay, postId)) ?? null;
 export const dayPost = async (day: string): Promise<string | null> => (await redis.hGet(K.dayPost, day)) ?? null;
 
+export const adoptPost = async (postId: string, day: string) => {
+  await redis.hSet(K.postDay, { [postId]: day });
+  await redis.hSet(K.dayPost, { [day]: postId });
+};
+
 export const createDailyPost = async (day: string, dayNumber: number) => {
   const arena = arenaForDay(day);
   const post = await reddit.submitCustomPost({

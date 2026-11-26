@@ -33,6 +33,7 @@ import {
   lastResultFor,
   leaderboard,
   postDay,
+  adoptPost,
   saveBuild,
 } from '../core/state';
 
@@ -50,7 +51,13 @@ api.get('/init', async (c) => {
   try {
     const { day, dayNumber } = await ensureState();
     const { userId, username, postId } = context;
-    const pDay = (postId && (await postDay(postId))) || day;
+    let pDay = postId ? await postDay(postId) : null;
+    // a post the app didn't make itself (e.g. the playtest post) becomes today's post if today has none
+    if (postId && !pDay && !(await dayPost(day))) {
+      await adoptPost(postId, day);
+      pDay = day;
+    }
+    pDay = pDay ?? day;
     if (userId && username) await rememberUser(userId, username);
     const profile = userId ? await getProfile(userId) : null;
     const res: InitResponse = {
