@@ -16,7 +16,7 @@ import { winsFor } from '../shared/game/tournament';
 import { BattleView } from './components/BattleView';
 import { PixelMech } from './components/PixelMech';
 import { api, countdown } from './lib/api';
-import { audioStatus, isMuted, onMuteChange, setMuted, sfx } from './lib/sfx';
+import { isMuted, onMuteChange, setMuted, sfx } from './lib/sfx';
 import { Garage } from './screens/Garage';
 
 type Fight = {
@@ -69,23 +69,6 @@ const MuteButton = () => {
       onClick={() => setMuted(!m)}
     >
       {m ? '🔇' : '🔊'}
-    </button>
-  );
-};
-
-const SoundCheck = () => {
-  const [status, setStatus] = useState('tap to test');
-  return (
-    <button
-      data-quiet
-      className="btn bg-card text-xs w-full"
-      onClick={() => {
-        setMuted(false);
-        sfx.win();
-        setTimeout(() => setStatus(audioStatus()), 300);
-      }}
-    >
-      Sound check: {status}
     </button>
   );
 };
@@ -632,7 +615,6 @@ export const App = () => {
               </ol>
             </details>
 
-            <SoundCheck />
           </>
         )}
 

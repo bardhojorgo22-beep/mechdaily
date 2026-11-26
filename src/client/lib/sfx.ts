@@ -6,7 +6,6 @@ type Wave = OscillatorType;
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
-let lastError: string | null = null;
 let muted = (() => {
   try {
     return localStorage.getItem('mech-muted') === '1';
@@ -35,7 +34,7 @@ const audio = (): AudioContext | null => {
     if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
   } catch (e) {
-    lastError = e instanceof Error ? e.message : String(e);
+    console.warn('audio unavailable', e);
     return null;
   }
 };
@@ -68,13 +67,6 @@ if (typeof window !== 'undefined') {
 
 export const isMuted = () => muted;
 
-/** For the on-screen sound check. */
-export const audioStatus = () => {
-  if (muted) return 'muted';
-  if (lastError) return `error: ${lastError}`;
-  if (!ctx) return 'not started';
-  return `${ctx.state} · ${ctx.sampleRate}Hz`;
-};
 export const setMuted = (m: boolean) => {
   muted = m;
   try {
