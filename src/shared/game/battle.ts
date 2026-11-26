@@ -188,7 +188,7 @@ export const simulateBattle = (
       else if (me.s.behavior === 'kite') strafe = 0.4;
       else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk')
         strafe = 0.12;
-      if (tick % 37 === 0 && rng.chance(0.6)) me.strafeSign *= -1;
+      if (tick % 45 === 0 && rng.chance(0.5)) me.strafeSign *= -1;
 
       // Backed into a wall? Slide along it instead of getting pinned.
       const nearWall = me.x < 90 || me.x > W - 90 || me.y < 70 || me.y > H - 70;

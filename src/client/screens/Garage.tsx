@@ -184,7 +184,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
           <Bar
             label="SPEED"
             value={st.speed}
-            max={220}
+            max={130}
             text={`${Math.round(st.speed)} m/s`}
           />
           <Bar

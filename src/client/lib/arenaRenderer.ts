@@ -7,6 +7,7 @@ import {
   type ShotEvent,
 } from '../../shared/game/battle';
 import type { Build } from '../../shared/game/mech';
+import { getPart } from '../../shared/game/parts';
 import { createRng } from '../../shared/game/rng';
 import { sfx } from './sfx';
 
@@ -395,6 +396,12 @@ export const createRenderer = (
   let koPlayed = false;
   let flash = 0;
   const debrisDone = new Set<number>();
+  let sepOffset = 0;
+  let lastT = 0;
+  const legTypes = builds.map((b) => {
+    const p = getPart(b.parts.legs);
+    return p.slot === 'legs' ? p.legType : 'biped';
+  });
 
   const fxOf = (ev: ShotEvent): Fx =>
     FX_BY_PART[builds[ev.by].parts[ev.slot]] ?? FALLBACK[ev.type];
@@ -438,17 +445,32 @@ export const createRenderer = (
   const draw = (t: number, dt: number): boolean => {
     const fr = frameAt(result, t);
     const pos = fr.map((m) => ({ x: m.x * sc, y: m.y * sc }));
-    // Melee fights put mechs on top of each other; nudge them apart visually.
+    // Melee fights put mechs on top of each other; ease them apart visually
+    // (eased so mechs passing each other glide instead of snapping).
     {
-      const dx = pos[1]!.x - pos[0]!.x;
+      const rawDx = pos[1]!.x - pos[0]!.x;
       const gap = SPRITE_W * 0.7;
-      if (Math.abs(dx) < gap) {
-        const push = (gap - Math.abs(dx)) / 2;
-        const dir = dx >= 0 ? 1 : -1;
-        pos[0]!.x = Math.max(SPRITE_W / 2, pos[0]!.x - dir * push);
-        pos[1]!.x = Math.min(W - SPRITE_W / 2, pos[1]!.x + dir * push);
-      }
+      const target =
+        Math.abs(rawDx) < gap
+          ? ((rawDx >= 0 ? 1 : -1) * (gap - Math.abs(rawDx))) / 2
+          : 0;
+      const step = 90 * dt * Math.max(1, getSpeed());
+      sepOffset += Math.max(-step, Math.min(step, target - sepOffset));
+      pos[0]!.x = Math.max(
+        SPRITE_W / 2,
+        Math.min(W - SPRITE_W / 2, pos[0]!.x - sepOffset)
+      );
+      pos[1]!.x = Math.max(
+        SPRITE_W / 2,
+        Math.min(W - SPRITE_W / 2, pos[1]!.x + sepOffset)
+      );
     }
+    const hopAt = (i: number, tt: number) => {
+      // reverse-joint legs move in visible hops: a little parabola every 0.45s
+      if (legTypes[i] !== 'reverse' || !fr[i]!.moving) return 0;
+      const ph = (tt / 4.5 + i * 0.37) % 1;
+      return 4 * ph * (1 - ph) * 9;
+    };
     const quiet = getSpeed() > 2;
 
     // ── weapons fired ──
@@ -820,12 +842,58 @@ export const createRenderer = (
       const m = fr[i]!;
       const p = pos[i]!;
       const other = pos[1 - i]!;
-      const bobY = m.moving && Math.floor(t / 1.5) % 2 === 0 ? -1 : 0;
+      const leg = legTypes[i];
+      const hop = hopAt(i, t);
+      let bobY = 0;
+      if (leg === 'reverse') bobY = -Math.round(hop);
+      else if (leg === 'hover')
+        bobY = Math.floor(t / 3 + i) % 2 === 0 ? -2 : -1;
+      else if (m.moving) bobY = Math.floor(t / 1.5) % 2 === 0 ? -1 : 0;
       const x = Math.round(p.x);
       const y = Math.round(p.y);
+      const shadowW = Math.max(12, 24 - Math.round(hop));
       g.fillStyle = 'rgba(27,26,23,0.28)';
-      g.fillRect(x - 12, y + SPRITE_H / 2 - 3, 24, 3);
-      g.fillRect(x - 9, y + SPRITE_H / 2 - 4, 18, 1);
+      g.fillRect(x - shadowW / 2, y + SPRITE_H / 2 - 3, shadowW, 3);
+      g.fillRect(x - shadowW / 2 + 3, y + SPRITE_H / 2 - 4, shadowW - 6, 1);
+      if (leg === 'hover') {
+        g.fillStyle =
+          Math.floor(t * 3) % 2 === 0
+            ? 'rgba(60,240,236,0.5)'
+            : 'rgba(60,240,236,0.25)';
+        g.fillRect(x - 8, y + SPRITE_H / 2 - 5, 16, 1);
+      }
+      // landing puff at the end of each hop
+      if (
+        leg === 'reverse' &&
+        m.moving &&
+        hop < 1.2 &&
+        hopAt(i, lastT) >= 1.2
+      ) {
+        spawn(
+          x - 5,
+          y + SPRITE_H / 2 - 2,
+          2,
+          [theme.speck, theme.dark],
+          10,
+          0.4,
+          2,
+          -0.5,
+          -0.2,
+          0.4
+        );
+        spawn(
+          x + 5,
+          y + SPRITE_H / 2 - 2,
+          2,
+          [theme.speck, theme.dark],
+          10,
+          0.4,
+          2,
+          0.5,
+          -0.2,
+          0.4
+        );
+      }
       const sp = sprites.current[i];
       g.save();
       g.translate(x, y + bobY);
@@ -1179,6 +1247,7 @@ export const createRenderer = (
     }
     g.restore();
 
+    lastT = t;
     return particles.length > 0 || shake > 0.2 || flash > 0;
   };
 
