@@ -1,4 +1,5 @@
 import { context, reddit, redis } from '@devvit/web/server';
+import { buildTitle } from '../../shared/game/title';
 import type { Champion, LastResult, Profile } from '../../shared/api';
 import { arenaForDay, dayKey, getArena } from '../../shared/game/arenas';
 import { FACTIONS, FACTION_IDS, isFactionId, type FactionId } from '../../shared/game/factions';
@@ -347,7 +348,8 @@ export const runRollover = async (): Promise<string> => {
   if (oldPost && oldPost.startsWith('t3_')) {
     const final = t.rounds[t.rounds.length - 1]![0]!;
     const loser = t.entrants[final.w === final.a ? final.b : final.a]!;
-    const who = (e: Entrant) => (e.bot ? `**${e.build.name}** (bot)` : `**${e.build.name}** — u/${e.pilot}`);
+    const who = (e: Entrant) =>
+      `${e.bot ? `**${e.build.name}** (bot)` : `**${e.build.name}** — u/${e.pilot}`}, *${buildTitle(e.build, arena)}*`;
     const pts = FACTION_IDS.map((f) => `${FACTIONS[f].name} +${t.factionPoints[f] ?? 0}`).join(' · ');
     const text = [
       `## Day ${dayNumber} results — ${arena.name}`,

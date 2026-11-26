@@ -9,6 +9,7 @@ import type {
   ChallengeResponse,
   ChallengesResponse,
   ShareResponse,
+  SaveResponse,
   ResultsResponse,
 } from '../../shared/api';
 import { arenaForDay } from '../../shared/game/arenas';
@@ -17,6 +18,7 @@ import { validateBuild } from '../../shared/game/mech';
 import { attackBoss, raidState } from '../core/raid';
 import { challenge, listChallenges, rememberUser } from '../core/challenge';
 import { getReel, shareFight } from '../core/share';
+import { discover, getFound } from '../core/synergy';
 import {
   dayNumberOf,
   dayPost,
@@ -92,6 +94,7 @@ api.get('/init', async (c) => {
       last: await lastResultFor(day, userId),
       raid: await raidState(day, userId, username),
       reel: await getReel(),
+      synergiesFound: await getFound(),
     };
     return c.json(res);
   } catch (e) {
@@ -107,7 +110,10 @@ api.post('/save', async (c) => {
   const build = validateBuild(body && typeof body === 'object' ? Reflect.get(body, 'build') : null);
   if (!build) return c.json(err('That build is not valid.'), 400);
   await saveBuild(userId, build);
-  return c.json({ type: 'save', ok: true });
+  const { day } = await ensureState();
+  const discovered = context.username ? await discover(build, context.username, day) : [];
+  const res: SaveResponse = { type: 'save', ok: true, discovered };
+  return c.json(res);
 });
 
 api.post('/enter', async (c) => {
@@ -122,6 +128,7 @@ api.post('/enter', async (c) => {
     type: 'enter',
     entryCount: r.entryCount,
     streak: r.streak,
+    discovered: await discover(build, username, day),
   };
   return c.json(res);
 });

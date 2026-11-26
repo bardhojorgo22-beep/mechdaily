@@ -1,6 +1,7 @@
 import type { FactionId } from './game/factions';
 import type { Build, Tax } from './game/mech';
 import type { TournamentResult } from './game/tournament';
+import type { SynergyId } from './game/synergies';
 
 export type Champion = {
   day: string;
@@ -87,7 +88,10 @@ export type InitResponse = {
   last: LastResult | null;
   raid: RaidState;
   reel: SharedFight[];
+  synergiesFound: Partial<Record<SynergyId, { by: string; day: string }>>;
 };
+
+export type SaveResponse = { type: 'save'; ok: boolean; discovered: SynergyId[] };
 
 /** A replay someone shared to the comments. Everything needed to re-run it exactly. */
 export type ShareRequest = {
@@ -115,6 +119,7 @@ export type EnterResponse = {
   type: 'enter';
   entryCount: number;
   streak: number;
+  discovered: SynergyId[];
 };
 export type FactionRequest = { faction: FactionId };
 

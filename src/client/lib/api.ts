@@ -8,6 +8,7 @@ import type {
   ResultsResponse,
   ShareRequest,
   ShareResponse,
+  SaveResponse,
 } from '../../shared/api';
 import type { FactionId } from '../../shared/game/factions';
 import type { Build } from '../../shared/game/mech';
@@ -30,7 +31,7 @@ const call = async <T>(path: string, init?: RequestInit): Promise<T> => {
 export const api = {
   init: () => call<InitResponse>('/api/init'),
   save: (build: Build) =>
-    call<{ ok: boolean }>('/api/save', {
+    call<SaveResponse>('/api/save', {
       method: 'POST',
       body: JSON.stringify({ build }),
     }),

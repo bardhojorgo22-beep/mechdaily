@@ -1,6 +1,7 @@
 import type { Arena } from './arenas';
 import { computeStats, type Build, type MechStats, type MountedWeapon, type Tax } from './mech';
 import { clamp, createRng } from './rng';
+import type { SynergyId } from './synergies';
 
 export const TICKS_PER_SECOND = 10;
 export const MAX_TICKS = 90 * TICKS_PER_SECOND;
@@ -21,6 +22,7 @@ export type ShotEvent = {
   dodged?: boolean; // missed because the target was mid quick-boost
   stagger?: boolean; // a big ranged hit stopped a charging target in its tracks
   ram?: boolean; // Velocity: a full-speed crash, not a weapon
+  syn?: SynergyId; // a hidden synergy made this happen
 };
 
 /** Once-per-fight pilot chip special moves. */
@@ -129,6 +131,10 @@ type MechState = {
   threat: number; // tick when a big enemy shot was telegraphed
   lastStand: number; // tick the armor was purged, -1 = not yet
   momentum: number; // Velocity chip, 0..1
+  markedUntil: number; // Hunter: pinned by an arrow, next jab crits
+  burnUntil: number; // Inferno: on fire
+  burnDps: number;
+  backoffUntil: number; // hybrid pilots: retreat to shoot after a melee strike
   ramUntil: number; // Velocity ram in progress
 };
 
@@ -164,6 +170,10 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   threat: -99,
   lastStand: -1,
   momentum: 0,
+  markedUntil: 0,
+  burnUntil: 0,
+  burnDps: 0,
+  backoffUntil: 0,
   ramUntil: 0,
 });
 
@@ -178,10 +188,11 @@ const usable = (m: MechState, i: number) => {
 
 /** The distance this pilot wants to fight at. */
 /** Expected damage per second `a` deals to `b` at distance d (rough, for pilot decisions). */
-const dpsAt = (a: MechState, b: MechState, d: number, arena: Arena): number => {
+const dpsAt = (a: MechState, b: MechState, d: number, arena: Arena, only?: (wp: MountedWeapon) => boolean): number => {
   let total = 0;
   a.s.weapons.forEach((wp, i) => {
     if (!usable(a, i)) return;
+    if (only && !only(wp)) return;
     if (d < wp.minRange || d > reach(a, wp, arena)) return;
     const perSec = (wp.damage * DAMAGE_SCALE) / (wp.cooldown / TICKS_PER_SECOND);
     const acc = wp.accuracy * a.s.accuracy * (1 - 0.25 * (d / wp.maxRange));
@@ -209,7 +220,44 @@ const desiredRange = (m: MechState, foe: MechState, arena: Arena, tick: number, 
     0
   );
   const allDps = m.s.weapons.reduce((a, wp, i) => (usable(m, i) ? a + wp.damage / wp.cooldown : a), 0);
-  if (meleeDps > 0 && meleeDps >= allDps * 0.45) {
+  const meleeShare = allDps > 0 ? meleeDps / allDps : 0;
+  const rangedShare = 1 - meleeShare;
+  // Hybrids (real melee AND real guns) switch modes instead of ignoring half their loadout.
+  if (meleeDps > 0 && rangedShare >= 0.15 && meleeShare >= 0.25) {
+    const ranged = (wp: MountedWeapon) => wp.type !== 'melee';
+    const minR = Math.max(
+      60,
+      ...m.s.weapons.filter((wp, i) => ranged(wp) && usable(m, i)).map((wp) => wp.minRange + 50)
+    );
+    let gunD = Math.max(minR, 260);
+    let gunScore = -Infinity;
+    for (let d = minR; d <= Math.max(minR, 420); d += 30) {
+      const mine = dpsAt(m, foe, d, arena, ranged);
+      if (mine <= 0) continue;
+      const score = mine / foeHp - (dpsAt(foe, m, d, arena) / myHp) * 0.9;
+      if (score > gunScore) {
+        gunScore = score;
+        gunD = d;
+      }
+    }
+    const blade = m.s.weapons.findIndex((wp, i) => wp.type === 'melee' && usable(m, i));
+    const bladeReady = blade >= 0 && m.cooldown[blade]! <= 6;
+    let want: number;
+    // guns that can't fire up close (bows, rails, cannons) need a step back; pistols don't
+    const needsRoom = minR > 110;
+    if (meleeShare >= 0.45) {
+      // brawler with guns: dive in, strike, back off and shoot while the fist resets, dive again
+      want = needsRoom && tick < m.backoffUntil && !bladeReady ? gunD : 50;
+    } else {
+      // gunner with a blade: hold the gun range, dive only when the blade is ready and they're close
+      const foeDist = Math.hypot(foe.x - m.x, foe.y - m.y);
+      want = bladeReady && foeDist < 320 && tick >= m.backoffUntil ? 50 : gunD;
+    }
+    m.want = want;
+    m.wantUntil = tick + 3;
+    return want;
+  }
+  if (meleeDps > 0 && meleeShare >= 0.45) {
     m.want = 50;
     m.wantUntil = tick + 5;
     return 50;
@@ -245,14 +293,6 @@ const desiredRange = (m: MechState, foe: MechState, arena: Arena, tick: number, 
       break;
     default:
       want = best.d;
-  }
-  // Hybrid blade builds hit-and-run: lunge when the blade is ready, back off while it recharges.
-  const melee = m.s.weapons.findIndex((wp, i) => wp.type === 'melee' && usable(m, i));
-  if (melee >= 0 && want < 160) {
-    const rangedHelp = dpsAt(m, foe, 300, arena);
-    const bladeReady = m.cooldown[melee]! <= 4;
-    if (!bladeReady && rangedHelp > 0) want = 300;
-    else want = 50;
   }
   // a little ebb and flow so fights don't lock into one spot
   const phase = ((tick + idx * 37) % 80) / 40 - 1;
@@ -317,6 +357,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
   const lastStands: LastStandEvent[] = [];
   const invuln = (m: MechState) => m.lastStand >= 0 && tick < m.lastStand + LAST_STAND_INVULN;
   const stripped = (m: MechState) => m.lastStand >= 0;
+  const syn = (m: MechState, id: SynergyId) => m.s.synergies.includes(id);
   const active = (m: MechState, kind: MechStats['behavior']) => m.s.behavior === kind && m.specialUntil > tick;
   const frames: number[] = [];
   const events: ShotEvent[] = [];
@@ -564,7 +605,9 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       // polarity flips to suit its owner: pull when they want closer, repel when they want space
       const gap = dist - foe.want;
       if (foe.s.pull > 0 && dist > 110 && dist < 620 && Math.abs(gap) > 40 && !active(me, 'redshift')) {
-        const drag = (foe.s.pull / (1 + me.s.weight / 120)) * (gap > 0 ? 1 : -0.8);
+        const pileIdx = foe.s.weapons.findIndex((x) => x.partId === 'r-pile');
+        const trapSet = syn(foe, 'beartrap') && pileIdx >= 0 && foe.cooldown[pileIdx]! <= 6;
+        const drag = (foe.s.pull / (1 + me.s.weight / 120)) * (gap > 0 ? (trapSet ? 1.5 : 1) : -0.8);
         px = -ux * drag * DT;
         py = -uy * drag * DT;
       }
@@ -597,6 +640,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       m.heat = Math.max(0, m.heat - m.s.cooling * DT);
       if (m.heat >= 100) m.overheated = true;
       else if (m.overheated && m.heat < 40) m.overheated = false;
+      if (m.burnUntil > tick && !invuln(m)) m.hp -= m.burnDps * DT;
       if (m.s.behavior === 'berserk' && m.heat > 100 && !stripped(m)) {
         // meltdown: running redline slowly cooks the pilot, but hits harder
         m.heat = Math.min(m.heat, 170);
@@ -648,7 +692,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           (active(me, 'redshift') ? 1 : 0) -
           (stripped(me) && tick % 2 === 0 ? 1 : 0);
         const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
-        if (big && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
+        const ghost = syn(me, 'ghost') && wp.partId === 'r-rail';
+        if (big && !ghost && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
         if (me.cooldown[w]! > 0) return;
         const ammo = me.ammo[w];
         if (ammo !== null && ammo !== undefined && ammo <= 0) return;
@@ -658,7 +703,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         const crit = me.charged && w === longest;
         if (crit) me.charged = false;
 
-        me.cooldown[w] = wp.cooldown;
+        me.cooldown[w] = syn(me, 'siege') && wp.partId === 'bk-howitzer' ? Math.round(wp.cooldown * 0.8) : wp.cooldown;
+        let synTag: SynergyId | null = null;
         // melee strikes lunge: the attacker jumps forward into the blow
         const closingSpeed = (me.vx * (foe.x - me.x) + me.vy * (foe.y - me.y)) / Math.max(1, dist);
         if (wp.type === 'melee') {
@@ -675,6 +721,18 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (me.s.behavior === 'turtle') acc *= 1.05;
         if (wp.type === 'explosive') acc *= arena.explosiveAccuracy;
         acc *= 1 - 0.25 * (dist / wp.maxRange);
+        if (syn(me, 'siege') && wp.partId === 'bk-howitzer') {
+          acc *= 1.25;
+          synTag = 'siege';
+        }
+        if (syn(me, 'lockon') && wp.partId === 'bk-swarm') {
+          acc *= 1.4;
+          synTag = 'lockon';
+        }
+        if (ghost) {
+          acc *= 1.15;
+          synTag = 'ghost';
+        }
         let ev = foe.s.evasion * (0.3 + 0.7 * Math.min(1, foe.moveFrac)) * (0.5 + 0.5 * (dist / wp.maxRange));
         if (foe.s.behavior === 'kite' && foe.moving) ev *= 1.1;
         if (foe.s.behavior === 'flank' && foe.moving) ev *= 1.1;
@@ -691,7 +749,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (wp.homing) ev *= 0.6;
         let p = clamp(acc * (1 - ev), 0.05, 0.97);
         if (crit) p = Math.min(0.97, p + 0.35);
-        const hit = rng.chance(p);
+        let hit = rng.chance(p);
+        let zapped = false;
+        if (hit && wp.type !== 'melee' && syn(foe, 'guardian') && rng.chance(0.16)) {
+          hit = false;
+          zapped = true;
+        }
 
         let dmg = 0;
         let blocked = false;
@@ -708,6 +771,30 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (tick > OVERTIME_TICK) dmg *= 1 + (tick - OVERTIME_TICK) / 150; // sudden death
           if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.25, (me.heat - 100) / 200);
           if (active(foe, 'turtle')) dmg *= 0.6;
+          // ── hidden synergies ──
+          if (syn(me, 'hunter') && wp.partId === 'lw-knuckle' && foe.markedUntil > tick) {
+            dmg *= 2;
+            foe.markedUntil = 0;
+            synTag = 'hunter';
+          }
+          if (syn(me, 'knight') && wp.partId === 'r-lance' && closingSpeed > 0) {
+            dmg *= 1.08;
+            synTag = 'knight';
+          }
+          if (syn(me, 'beartrap') && wp.partId === 'r-pile') {
+            dmg *= 1.08;
+            synTag = 'beartrap';
+          }
+          if (syn(me, 'lockon') && wp.partId === 'bk-swarm') dmg *= 1.2;
+          if (syn(me, 'dancer') && wp.partId === 'lw-saber') dmg *= 1.2;
+          if (syn(me, 'driveby') && wp.partId === 'r-scatter' && me.momentum > 0.3) {
+            dmg *= 1.5;
+            synTag = 'driveby';
+          }
+          if (syn(me, 'thunder') && wp.partId === 'lw-lance' && me.energy > me.s.energyCap * 0.6) {
+            dmg *= 1.35;
+            synTag = 'thunder';
+          }
           if (!stripped(foe) && !wp.pierce) dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;
           // shields come up more while the holder is charging in
@@ -716,7 +803,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
             const canAfford = foe.energy >= sh.energyPerHit;
             if (canAfford) {
               foe.energy -= sh.energyPerHit;
-              dmg *= 1 - (wp.type === 'melee' && sh.energyPerHit > 0 ? sh.block * 0.4 : sh.block);
+              const knightGuard = syn(foe, 'knight') && closing;
+              dmg *=
+                1 -
+                (knightGuard
+                  ? Math.min(0.68, sh.block + 0.08)
+                  : wp.type === 'melee' && sh.energyPerHit > 0
+                    ? sh.block * 0.4
+                    : sh.block);
               blocked = true;
             }
           }
@@ -732,7 +826,9 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
             !active(foe, 'turtle')
               ? Math.min(9, Math.round(3 + (wp.damage * DAMAGE_SCALE * 4) / Math.max(40, foe.s.weight) / 8))
               : 0;
-          staggerFlag = staggerTicks > 0;
+          const trapStagger = syn(me, 'beartrap') && wp.partId === 'r-pile' && !active(foe, 'turtle') ? 4 : 0;
+          const totalStagger = Math.max(staggerTicks, trapStagger);
+          staggerFlag = totalStagger > 0;
           if (invuln(foe)) {
             dmg = 0; // shots pass through the purge flash
             staggerFlag = false;
@@ -741,8 +837,24 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           const kb = { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
           const push = Math.min(170, (dmg * kb * 18) / Math.max(30, foe.s.weight));
           const d = dist || 1;
+          // on-hit synergy effects
+          if (dmg > 0 && syn(me, 'hunter') && wp.partId === 'r-bow') {
+            foe.markedUntil = tick + 40;
+            foe.planted = Math.max(foe.planted, 4);
+            synTag = 'hunter';
+          }
+          if (dmg > 0 && syn(me, 'inferno') && wp.partId === 'lw-flamer') {
+            foe.burnUntil = tick + 30;
+            foe.burnDps = foe.s.hp * 0.009;
+            synTag = 'inferno';
+          }
+          if (dmg > 0 && syn(me, 'dancer') && wp.partId === 'lw-saber') {
+            me.qbCd = 0;
+            me.qbUntil = tick + 4;
+            synTag = 'dancer';
+          }
           pending.push({
-            stagger: staggerTicks,
+            stagger: invuln(foe) ? 0 : totalStagger,
             target: i === 0 ? 1 : 0,
             dmg,
             kx: ((foe.x - me.x) / d) * push,
@@ -761,14 +873,18 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           ...(crit ? { crit: true } : {}),
           ...(!hit && foe.qbUntil > tick ? { dodged: true } : {}),
           ...(hit && staggerFlag ? { stagger: true } : {}),
+          ...(zapped ? { syn: 'guardian' as const } : synTag ? { syn: synTag } : {}),
         });
+        // hybrid pilots back off after a melee strike to use their guns
+        if (wp.type === 'melee') me.backoffUntil = tick + 16;
       });
     }
     for (const p of pending) {
       const t = mechs[p.target]!;
       if (invuln(t)) continue;
       t.hp -= p.dmg;
-      if (t.s.behavior === 'velocity' && p.dmg > 0) t.momentum = Math.max(0, t.momentum - 0.08 - (p.dmg / t.s.hp) * 1.3);
+      if (t.s.behavior === 'velocity' && p.dmg > 0)
+        t.momentum = Math.max(0, t.momentum - 0.08 - (p.dmg / t.s.hp) * 1.3);
       if (p.stagger > 0) {
         t.planted = Math.max(t.planted, p.stagger);
         t.ob = false;

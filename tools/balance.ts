@@ -36,7 +36,10 @@ for (const arena of ARENAS) {
       if (r.reason === 'time') timeouts++;
       const win = r.winner === 0 ? i : j;
       wins[win]++;
-      for (const [idx, won] of [[i, win === i], [j, win === j]] as const) {
+      for (const [idx, won] of [
+        [i, win === i],
+        [j, win === j],
+      ] as const) {
         for (const id of Object.values(builds[idx]!.parts)) {
           for (const tbl of [arenaParts, partWins]) {
             tbl[id] ??= { w: 0, n: 0 };
@@ -67,7 +70,9 @@ for (const arena of ARENAS) {
   }
 }
 
-console.log(`\nfights ${fights}, timeouts ${((timeouts / fights) * 100).toFixed(1)}%, avg length ${(totalTicks / fights / 10).toFixed(1)}s\n`);
+console.log(
+  `\nfights ${fights}, timeouts ${((timeouts / fights) * 100).toFixed(1)}%, avg length ${(totalTicks / fights / 10).toFixed(1)}s\n`
+);
 const bySlot: Record<string, string[]> = {};
 for (const [id, v] of Object.entries(overall).sort((a, b) => b[1].w / b[1].n - a[1].w / a[1].n)) {
   const p = getPart(id);

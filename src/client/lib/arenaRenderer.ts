@@ -486,6 +486,8 @@ export const createRenderer = (
     return { x: p.x + Math.cos(a) * 14, y: p.y - SPRITE_H * 0.55 + Math.sin(a) * 4 };
   };
   const burnUntil = [0, 0];
+  const zaps: { x0: number; y0: number; x1: number; y1: number; until: number }[] = [];
+  const ringFx: { x: number; y: number; t: number }[] = [];
   const lastPunch = [-99, -99];
   const bursts: { x: number; y: number; t: number; word: string; big: boolean }[] = [];
   const brokenUp = [false, false];
@@ -826,6 +828,19 @@ export const createRenderer = (
       impacted.add(i);
       const at = aimPoint(ev, foe, i);
       const victim = 1 - ev.by;
+      if (ev.syn === 'guardian') {
+        // the guardian drone zaps the shot out of the air
+        const dp = dronePos(victim, foe, t);
+        const mid = { x: (me.x + foe.x) / 2 + (foe.x - me.x) * 0.3, y: (me.y + foe.y) / 2 };
+        zaps.push({ x0: dp.x, y0: dp.y, x1: mid.x, y1: mid.y, until: t + 3 });
+        spawn(mid.x, mid.y, 10, ['#ffffff', '#3cf0ec', '#bffcfb'], 40, 0.3, 1);
+        continue;
+      }
+      if (ev.syn && ev.hit) {
+        // synergy hits get a gold flourish
+        spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ffc914'], 55, 0.45, 1);
+        ringFx.push({ x: at.x, y: at.y, t });
+      }
       if (!ev.hit) {
         spawn(at.x, at.y + 4, 3, [theme.speck, theme.dark], 14, 0.4, 1);
         if (fx === 'missiles' || fx === 'shell') {
@@ -1795,6 +1810,31 @@ export const createRenderer = (
         g.fillText(txt, Math.round(to.x + jx) + ox, yy + oy);
       g.fillStyle = ev.blocked ? '#3cf0ec' : ev.dmg > 140 ? '#ffc914' : '#ffffff';
       if (a < 0.7 || Math.floor(t * 4) % 2 === 0) g.fillText(txt, Math.round(to.x + jx), yy);
+    }
+
+    // guardian zaps + synergy rings
+    for (let k = zaps.length - 1; k >= 0; k--) {
+      const z = zaps[k]!;
+      if (t > z.until) {
+        zaps.splice(k, 1);
+        continue;
+      }
+      line(z.x0, z.y0, z.x1, z.y1, Math.floor(t * 8) % 2 === 0 ? '#ffffff' : '#3cf0ec');
+    }
+    for (let k = ringFx.length - 1; k >= 0; k--) {
+      const rf = ringFx[k]!;
+      const age = t - rf.t;
+      if (age > 5) {
+        ringFx.splice(k, 1);
+        continue;
+      }
+      g.globalAlpha = 1 - age / 5;
+      g.strokeStyle = '#ffd23f';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(Math.round(rf.x), Math.round(rf.y), 4 + age * 4, 0, Math.PI * 2);
+      g.stroke();
+      g.globalAlpha = 1;
     }
 
     // grav anchor: field lines between the magnet and its target

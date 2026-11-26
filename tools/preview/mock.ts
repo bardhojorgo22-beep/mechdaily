@@ -60,6 +60,7 @@ const init = {
     ],
     factions: { foundry: 1000, tide: 4120, static: 0 },
   },
+  synergiesFound: { hunter: { by: 'DunhillGri', day: '2026-11-26' }, ghost: { by: 'someone', day: '2026-11-25' } },
   reel: [
     {
       id: '2',
@@ -155,6 +156,6 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
       max: 88000,
       lastHit: false,
     });
-  if (url.startsWith('/api/')) return json({ ok: true, entryCount: 15, streak: 4, faction: 'tide' });
+  if (url.startsWith('/api/')) return json({ ok: true, entryCount: 15, streak: 4, faction: 'tide', discovered: [] });
   return realFetch(input, initArg);
 };

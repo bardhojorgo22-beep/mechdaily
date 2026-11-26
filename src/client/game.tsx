@@ -20,6 +20,8 @@ import { bossForDay, simulateRaid } from '../shared/game/boss';
 import { FACTIONS, FACTION_IDS, type FactionId } from '../shared/game/factions';
 import { DEFAULT_BUILD, validateBuild, type Build, type Tax } from '../shared/game/mech';
 import { getPart } from '../shared/game/parts';
+import { SYNERGIES, type SynergyId } from '../shared/game/synergies';
+import { buildTitle } from '../shared/game/title';
 import { winsFor } from '../shared/game/tournament';
 import { BattleView } from './components/BattleView';
 import { PixelMech } from './components/PixelMech';
@@ -283,6 +285,25 @@ export const App = () => {
 
   const entered = data?.myEntry ? JSON.stringify(data.myEntry) === JSON.stringify(build) : false;
 
+  /** You were the first in the sub to equip a hidden combo. */
+  const celebrate = useCallback(
+    (ids: SynergyId[] | undefined) => {
+      if (!ids || ids.length === 0) return;
+      sfx.hype(3, true);
+      const day = data?.day ?? '';
+      const by = data?.username ?? 'you';
+      setData((d) =>
+        d
+          ? { ...d, synergiesFound: { ...d.synergiesFound, ...Object.fromEntries(ids.map((id) => [id, { by, day }])) } }
+          : d
+      );
+      showToast(
+        `🔓 You discovered ${ids.map((id) => SYNERGIES[id].name.toUpperCase()).join(' + ')}! Announced in the comments.`
+      );
+    },
+    [data?.day, data?.username]
+  );
+
   // Autosave: every change to the mech is saved (debounced) to the server
   // and backed up locally, so it survives refreshes and app updates.
   useEffect(() => {
@@ -293,13 +314,14 @@ export const App = () => {
     const id = setTimeout(() => {
       api
         .save(build)
-        .then(() => {
+        .then((r) => {
           lastSaved.current = json;
+          celebrate(r.discovered);
         })
         .catch(() => undefined);
     }, 700);
     return () => clearTimeout(id);
-  }, [build]);
+  }, [build, celebrate]);
 
   const leaveGarage = () => {
     setScreen('home');
@@ -312,6 +334,7 @@ export const App = () => {
     setBusy(true);
     try {
       const r = await api.enter(build);
+      celebrate(r.discovered);
       setData({
         ...data,
         myEntry: build,
@@ -658,9 +681,7 @@ export const App = () => {
               <div className="flex-1 min-w-0 flex flex-col gap-2">
                 <div>
                   <div className="font-display font-black text-xl leading-none truncate">{build.name}</div>
-                  <div className="text-[11px] text-mute">
-                    {getPart(build.parts.chip).name} pilot · {getPart(build.parts.legs).name} legs
-                  </div>
+                  <div className="text-[11px] text-mute">“{buildTitle(build, arena)}”</div>
                 </div>
                 <button className="btn bg-card text-sm" onClick={() => setScreen('garage')}>
                   Garage
@@ -744,6 +765,10 @@ export const App = () => {
                 <li>Practice against sparring bots and past champions.</li>
                 <li>Enter. At 00:00 UTC every entry fights in an automatic bracket.</li>
                 <li>Parts that were too popular get heavier the next day. Don't copy the meta.</li>
+                <li>
+                  Some odd part pairs are hidden synergies. Be the first in the sub to find one and you get credited in
+                  the comments. Hints are in the garage.
+                </li>
               </ol>
             </details>
           </>
@@ -757,6 +782,8 @@ export const App = () => {
             onChange={setBuild}
             onBack={leaveGarage}
             onTestFire={testFire}
+            found={data.synergiesFound}
+            username={data.username}
           />
         )}
 
@@ -1082,18 +1109,20 @@ const Bracket = ({
                 >
                   <span className={`flex-1 truncate ${m.w === m.a ? 'font-semibold' : 'text-mute line-through'}`}>
                     {t.entrants[m.a]!.build.name}
-                    {!t.entrants[m.a]!.bot && (
-                      <span className="block text-[10px] font-normal no-underline">u/{t.entrants[m.a]!.pilot}</span>
-                    )}
+                    <span className="block text-[10px] font-normal">
+                      {t.entrants[m.a]!.bot ? 'bot' : `u/${t.entrants[m.a]!.pilot}`} ·{' '}
+                      {buildTitle(t.entrants[m.a]!.build, arena)}
+                    </span>
                   </span>
                   <span className="text-[10px]">vs</span>
                   <span
                     className={`flex-1 truncate text-right ${m.w === m.b ? 'font-semibold' : 'text-mute line-through'}`}
                   >
                     {t.entrants[m.b]!.build.name}
-                    {!t.entrants[m.b]!.bot && (
-                      <span className="block text-[10px] font-normal no-underline">u/{t.entrants[m.b]!.pilot}</span>
-                    )}
+                    <span className="block text-[10px] font-normal">
+                      {t.entrants[m.b]!.bot ? 'bot' : `u/${t.entrants[m.b]!.pilot}`} ·{' '}
+                      {buildTitle(t.entrants[m.b]!.build, arena)}
+                    </span>
                   </span>
                   <span className="font-display font-black">▶</span>
                 </button>

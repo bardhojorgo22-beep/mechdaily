@@ -668,7 +668,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'kinetic',
-      damage: 54,
+      damage: 64,
       minRange: 0,
       maxRange: 544,
       cooldown: 10,
@@ -687,7 +687,7 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'melee',
-      damage: 346,
+      damage: 370,
       minRange: 0,
       maxRange: 128,
       cooldown: 22,
@@ -706,9 +706,9 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'melee',
-      damage: 180,
+      damage: 198,
       minRange: 0,
-      maxRange: 110,
+      maxRange: 115,
       cooldown: 10,
       heat: 8,
       energyCost: 0,
@@ -770,7 +770,7 @@ export const PARTS: Part[] = [
     blurb: 'Energy shield. Blocks a lot, costs a lot.',
     weight: 4,
     drain: 2,
-    shield: { block: 0.78, energyPerHit: 6 },
+    shield: { block: 0.72, energyPerHit: 6 },
   },
 
   // ── Back units ───────────────────────────────────────
@@ -840,7 +840,7 @@ export const PARTS: Part[] = [
     blurb: 'Bolted-on armor. Heavy.',
     weight: 14,
     drain: 0,
-    utility: { hp: 600, armorK: 0.08, armorE: 0.04 },
+    utility: { hp: 540, armorK: 0.07, armorE: 0.04 },
   },
   {
     id: 'bk-dish',
@@ -849,7 +849,7 @@ export const PARTS: Part[] = [
     blurb: 'Radar. Better aim, longer reach.',
     weight: 5,
     drain: 4,
-    utility: { sensor: 1530, accuracy: 0.24, range: 0.2 },
+    utility: { sensor: 1530, accuracy: 0.18, range: 0.2 },
   },
   {
     id: 'bk-chaff',
@@ -867,7 +867,7 @@ export const PARTS: Part[] = [
     blurb: "Magnet. Pulls enemies in if you want them close, pushes them off if you don't.",
     weight: 11,
     drain: 6,
-    utility: { pull: 130, hp: 200 },
+    utility: { pull: 145, hp: 260 },
   },
   {
     id: 'bk-fins',

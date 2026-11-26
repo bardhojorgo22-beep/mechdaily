@@ -1,5 +1,6 @@
 // Finds the moments worth shouting about in a replay.
 import { OVERTIME_TICK, SPECIALS, type BattleResult } from '../../shared/game/battle';
+import { SYNERGIES } from '../../shared/game/synergies';
 
 export type Highlight = {
   t: number; // tick
@@ -65,6 +66,17 @@ export const findHighlights = (r: BattleResult): Highlight[] => {
       combo[ev.by] = 0;
       comboShown[ev.by] = 0;
     }
+  }
+
+  // hidden synergies firing: first time each one triggers, then now and then
+  const synShown: Record<string, number> = {};
+  for (const ev of r.events) {
+    if (!ev.syn) continue;
+    const key = `${ev.by}:${ev.syn}`;
+    if (ev.t - (synShown[key] ?? -999) < 90) continue;
+    synShown[key] = ev.t;
+    const by: 0 | 1 = ev.syn === 'guardian' ? (ev.by === 0 ? 1 : 0) : ev.by;
+    push({ t: ev.t, by, text: `⚡ ${SYNERGIES[ev.syn].name.toUpperCase()}!`, tier: 1, focus: by }, 0);
   }
 
   for (const sp of r.specials) {

@@ -101,6 +101,24 @@ check(
   `raid share: "${sr.json.fight?.headline ?? sr.json.message}"`
 );
 check((await req('/init')).json.reel?.length === 2, 'fight reel shows both shares');
+// hidden synergies: first to equip gets credit + a comment, second gets nothing new
+as('joani', post1);
+const hunter = build('Hunter', { weaponR: 'r-bow', weaponL: 'lw-knuckle' });
+const d1 = await req('/save', { build: hunter });
+check(
+  JSON.stringify(d1.json.discovered) === '["hunter"]',
+  `joani discovers Hunter (${JSON.stringify(d1.json.discovered)})`
+);
+check(
+  log.some((l) => l.includes('Hidden synergy discovered') && l.includes('u/joani') && l.includes('Hunter')),
+  'discovery announced in comments'
+);
+as('friend2', post1);
+const d2 = await req('/save', { build: hunter });
+check(d2.json.discovered?.length === 0, 'second finder gets no credit');
+check((await req('/init')).json.synergiesFound?.hunter?.by === 'joani', 'init shows Hunter found by joani');
+const d3 = await req('/enter', { build: build('Knight', { weaponR: 'r-lance', weaponL: 'lw-door' }) });
+check(JSON.stringify(d3.json.discovered) === '["knight"]', 'entering with a new combo also discovers it');
 as('joani', post1);
 const re = await req('/enter', { build: build('joani v2') });
 check(

@@ -10,6 +10,12 @@ export const fightingStyle = (s: MechStats): FightingStyle => {
   const total = Math.max(0.01, dps());
   const longest = Math.max(0, ...s.weapons.map((w) => w.maxRange));
   const tough = s.hp * (1 + (s.armorK + s.armorE) / 2);
+  const share = melee / total;
+  const gunNeedsRoom = s.weapons.some((w) => w.type !== 'melee' && w.minRange > 60);
+  if (share >= 0.45 && share <= 0.85 && gunNeedsRoom)
+    return { name: 'Hit & Run', plan: 'Dives in to strike, steps back to shoot while the melee weapon resets.' };
+  if (share >= 0.25 && share < 0.45)
+    return { name: 'Duelist', plan: 'Holds gun range, darts in with the blade the moment it’s ready.' };
   if (melee / total > 0.45) {
     return tough > 3400 || s.shield
       ? { name: 'Brawler', plan: 'Shield up, charge in, land the big hit.' }

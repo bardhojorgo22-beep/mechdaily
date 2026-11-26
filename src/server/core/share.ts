@@ -5,6 +5,7 @@ import { simulateBattle, type BattleResult } from '../../shared/game/battle';
 import { bossForDay, simulateRaid } from '../../shared/game/boss';
 import { validateBuild, type Tax } from '../../shared/game/mech';
 import { verdict } from '../../shared/game/verdict';
+import { buildTitle } from '../../shared/game/title';
 import { sharesPerDay } from './limits';
 import { dayPost, parseJson } from './state';
 
@@ -138,7 +139,7 @@ export const shareFight = async (
     const l = v.winner === 0 ? ([req.b, req.bLabel] as const) : ([req.a, req.aLabel] as const);
     const how = v.ko ? `KO in ${v.seconds}s` : `on time after ${v.seconds}s`;
     const hit = v.biggestHit > 0 ? `, biggest hit ${Math.round(v.biggestHit).toLocaleString('en-US')}` : '';
-    detail = `${who(w[0].name, w[1])} beat ${who(l[0].name, l[1])} in ${arena.name}${v.tag ? ` — **${v.tag}**` : ''} (${how}${hit}).`;
+    detail = `${who(w[0].name, w[1])}, *${buildTitle(w[0], arena)}*, beat ${who(l[0].name, l[1])} in ${arena.name}${v.tag ? ` — **${v.tag}**` : ''} (${how}${hit}).`;
   }
   const text = [
     `🎬 u/${username} shared a fight`,

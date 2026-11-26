@@ -12,6 +12,9 @@ import {
 import { SLOTS, SLOT_SHORT, getPart, partsForSlot, type Part, type Slot } from '../../shared/game/parts';
 import { SPECIALS } from '../../shared/game/battle';
 import { fightingStyle } from '../../shared/game/style';
+import { SYNERGIES, SYNERGY_IDS, synergiesOf, type SynergyId } from '../../shared/game/synergies';
+import { buildTitle } from '../../shared/game/title';
+import type { InitResponse } from '../../shared/api';
 import { PixelMech } from '../components/PixelMech';
 import { sfx } from '../lib/sfx';
 
@@ -108,15 +111,34 @@ type Props = {
   onBack: () => void;
   /** Fire your weapons at a harmless target dummy. */
   onTestFire?: () => void;
+  found?: InitResponse['synergiesFound'];
+  username?: string | null;
 };
 
-export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire }: Props) => {
+export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found = {}, username = null }: Props) => {
   const [tab, setTab] = useState<Tab>('weaponR');
   const st = useMemo(() => computeStats(build, arena, tax), [build, arena, tax]);
+  const title = buildTitle(build, arena);
+  const active = st.synergies;
+  const [flash, setFlash] = useState<SynergyId | null>(null);
+  const foundCount = SYNERGY_IDS.filter((id) => found[id]).length;
+  // parts that would complete a synergy someone in the sub has already found
+  const completes = (slot: Slot, id: string): SynergyId | null => {
+    const next = { ...build.parts, [slot]: id };
+    for (const s of synergiesOf(next)) if (found[s] && !active.includes(s)) return s;
+    return null;
+  };
   const style = fightingStyle(st);
   const set = (slot: Slot, id: string) => {
-    if (build.parts[slot] !== id) sfx.equip();
-    onChange({ ...build, parts: { ...build.parts, [slot]: id } });
+    if (build.parts[slot] === id) return;
+    const next = { ...build.parts, [slot]: id };
+    const gained = synergiesOf(next).find((s) => !active.includes(s));
+    if (gained) {
+      sfx.hype(2, true);
+      setFlash(gained);
+      setTimeout(() => setFlash((f) => (f === gained ? null : f)), 2600);
+    } else sfx.equip();
+    onChange({ ...build, parts: next });
   };
   const partsKey = JSON.stringify(build.parts);
 
@@ -161,6 +183,26 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire }: Prop
           <Bar label="COOLING" value={Math.max(0, st.cooling)} max={80} text={`${Math.round(st.cooling)}/s`} />
         </div>
       </div>
+
+      <div className="text-center font-display font-black text-sm tracking-wide -mb-1">“{title.toUpperCase()}”</div>
+
+      {flash && (
+        <div className="sticker p-3 text-center pop" style={{ background: '#1b1a17', color: '#ffc914' }}>
+          <div className="font-display text-2xl stamp">⚡ SYNERGY: {SYNERGIES[flash].name.toUpperCase()}</div>
+          <div className="text-xs mt-1" style={{ color: '#efe8da' }}>
+            {found[flash] && found[flash]!.by !== username
+              ? `First found by u/${found[flash]!.by}.`
+              : 'A hidden combo! If nobody here found it yet, you get the credit.'}
+          </div>
+        </div>
+      )}
+
+      {active.map((id) => (
+        <div key={id} className="sticker p-2 flex items-start gap-2" style={{ background: '#fff3b0' }}>
+          <span className="tag bg-ink text-paper whitespace-nowrap">⚡ {SYNERGIES[id].name}</span>
+          <span className="text-[11px] flex-1">{SYNERGIES[id].effect}</span>
+        </div>
+      ))}
 
       <div className="sticker p-2 flex items-center gap-2" style={{ background: '#1b1a17', color: '#efe8da' }}>
         <span className="tag bg-sun text-ink">{style.name}</span>
@@ -266,6 +308,9 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire }: Prop
                   <div className="font-display font-black text-lg leading-none">{p.name}</div>
                   {active && <span className="tag bg-ink text-paper">equipped</span>}
                   {t > 0.05 && <span className="tag bg-rust text-white">popular · +{Math.round(t * 45)}% wt</span>}
+                  {!active && completes(tab, p.id) && (
+                    <span className="tag bg-ink text-paper">⚡ {SYNERGIES[completes(tab, p.id)!].name}</span>
+                  )}
                   <div className="ml-auto text-[11px] text-mute">
                     {p.weight}t{!active && dw !== 0 ? ` (${dw > 0 ? '+' : ''}${dw})` : ''}
                     {p.drain ? ` · ${p.drain}en` : ''}
@@ -285,6 +330,38 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire }: Prop
           })}
         </div>
       )}
+      <details className="sticker p-3">
+        <summary className="font-display font-black cursor-pointer">
+          ⚡ Hidden synergies · {foundCount}/{SYNERGY_IDS.length} found here
+        </summary>
+        <div className="text-[11px] text-mute mt-1">
+          Some odd part pairs secretly work together. The first redditor in this sub to equip one gets credited in the
+          comments.
+        </div>
+        <div className="flex flex-col gap-1.5 mt-2">
+          {SYNERGY_IDS.map((id) => {
+            const s = SYNERGIES[id];
+            const f = found[id];
+            const mine = active.includes(id);
+            return f || mine ? (
+              <div key={id} className="border-2 border-ink p-2" style={{ background: mine ? '#fff3b0' : '#f8f4ec' }}>
+                <div className="flex items-center gap-2">
+                  <span className="font-display font-black">{s.name}</span>
+                  {mine && <span className="tag bg-ink text-paper">active</span>}
+                  <span className="ml-auto text-[10px] text-mute">{f ? `found by u/${f.by}` : 'not credited yet'}</span>
+                </div>
+                <div className="text-[11px]">{s.parts.map((p) => getPart(p).name).join(' + ')}</div>
+                <div className="text-[11px] text-mute">{s.effect}</div>
+              </div>
+            ) : (
+              <div key={id} className="border-2 border-dashed border-ink p-2 opacity-80">
+                <span className="font-display font-black">???</span>
+                <span className="text-[11px] ml-2 italic">{s.hint}</span>
+              </div>
+            );
+          })}
+        </div>
+      </details>
     </div>
   );
 };

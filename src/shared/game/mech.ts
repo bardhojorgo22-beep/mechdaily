@@ -1,6 +1,7 @@
 import type { Arena } from './arenas';
 import { SLOTS, getPart, PART_BY_ID, type Behavior, type LegType, type Slot, type Weapon } from './parts';
 import { clamp } from './rng';
+import { synergiesOf, type SynergyId } from './synergies';
 
 export type Paint = { body: number; trim: number; decal: number };
 
@@ -88,6 +89,7 @@ export type MountedWeapon = Weapon & {
 };
 
 export type MechStats = {
+  synergies: SynergyId[];
   hp: number;
   armorK: number;
   armorE: number;
@@ -233,6 +235,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   const evasion = clamp((speed / 346) * legEvasion * (arena.evasion[legType] ?? 1), 0, 0.55);
 
   return {
+    synergies: synergiesOf(build.parts),
     hp: Math.round(hp),
     armorK: clamp(armorK, 0, 0.65),
     armorE: clamp(armorE, 0, 0.65),
