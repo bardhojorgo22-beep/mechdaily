@@ -1,5 +1,5 @@
 // Finds the moments worth shouting about in a replay.
-import { SPECIALS, type BattleResult } from '../../shared/game/battle';
+import { OVERTIME_TICK, SPECIALS, type BattleResult } from '../../shared/game/battle';
 
 export type Highlight = {
   t: number; // tick
@@ -76,6 +76,9 @@ export const findHighlights = (r: BattleResult): Highlight[] => {
   for (const ls of r.lastStands) {
     push({ t: ls.t, by: ls.by, text: 'LAST STAND!', sub: 'armor purged · 1 HP', tier: 2, focus: ls.by }, 0);
   }
+
+  if (r.ticks > OVERTIME_TICK + 10)
+    push({ t: OVERTIME_TICK, by: 0, text: 'SUDDEN DEATH!', sub: 'damage keeps rising', tier: 2, focus: 0 }, 0);
 
   // finale
   const w = r.winner;

@@ -19,7 +19,7 @@ export const RAID_POINTS = { topFaction: 10, killParticipation: 3 } as const;
 export const ensureRaid = async (day: string, players = 0) => {
   const exists = await redis.hGet(R.state(day), 'max');
   if (exists) return;
-  const max = raidPoolFor(players);
+  const max = raidPoolFor(players, bossForDay(day).id);
   await redis.hSetNX(R.state(day), 'max', String(max));
   await redis.hSetNX(R.state(day), 'hp', String(max));
 };

@@ -132,7 +132,17 @@ export const bossForDay = (day: string): Boss => BOSSES[hashString(`boss:${day}`
 export const BOSS_MODS = { hp: 7, damage: 0.85 };
 export const RAID_ATTEMPTS = 3;
 
-export const raidPoolFor = (players: number) => 25_000 + 7_000 * Math.max(0, players);
+/** Some bosses are much easier to hurt than others; scale their pools so every boss takes similar effort. */
+const POOL_SCALE: Record<string, number> = {
+  colossus: 2,
+  prism: 1.1,
+  hen: 0.85,
+  furnace: 0.75,
+  reaper: 0.7,
+  ghost: 0.55,
+};
+export const raidPoolFor = (players: number, bossId?: string) =>
+  Math.round(((12_000 + 7_000 * Math.max(0, players)) * (bossId ? (POOL_SCALE[bossId] ?? 1) : 1)) / 500) * 500;
 
 export const bossFighter = (day: string, tax: Tax): Fighter => ({ build: bossForDay(day).build, tax, mods: BOSS_MODS });
 

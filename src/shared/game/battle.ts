@@ -26,7 +26,7 @@ export type ShotEvent = {
 export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: string }> = {
   rush: {
     name: 'Overdrive',
-    blurb: 'Opens with a 3s burst of extra speed to close the gap.',
+    blurb: 'Opens with a 4s burst of extra speed and +20% damage to close the gap.',
   },
   kite: {
     name: 'Smoke Screen',
@@ -46,23 +46,28 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
   },
   flank: {
     name: 'Afterburner',
-    blurb: 'Below 75% HP: 2.5s sprint around the enemy, very hard to hit.',
+    blurb: 'Below 80% HP: 3.6s sprint around the enemy, very hard to hit, +20% damage.',
   },
   redshift: {
     name: 'Redshift',
     blurb:
-      'Below 70% HP: 3s where the pilot moves and shoots twice as fast, leaving light trails. Then the frame crashes: overheats and freezes for a second.',
+      'Below 75% HP: 3.6s where the pilot moves and shoots twice as fast, leaving light trails. Then the frame crashes: overheats and freezes for a second.',
   },
 };
 
 /** Ticks a Redshift crash lasts after the burst ends. */
-export const REDSHIFT_CRASH = 8;
+export const REDSHIFT_CRASH = 6;
+
+/** After this tick, damage keeps rising so stalemates end. */
+export const OVERTIME_TICK = 500;
 
 /** Movement bursts, for visuals: quick boost (sideways dash) or overboost (long charge). */
 export type MoveEvent = { t: number; by: 0 | 1; kind: 'qb' | 'ob'; dx: number; dy: number };
 
 /** Last Stand: a killing blow instead purges the armor. 1 HP, brief invulnerability, then fast and fragile. */
 export const LAST_STAND_INVULN = 15;
+/** Odds a killing blow triggers a last stand instead. Rare enough to be a moment. */
+export const LAST_STAND_CHANCE = 0.25;
 export type LastStandEvent = { t: number; by: 0 | 1 };
 
 export type SpecialEvent = {
@@ -345,7 +350,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         const hpPct = me.hp / me.s.hp;
         switch (me.s.behavior) {
           case 'rush':
-            if (tick >= 12 && dist > want + band) dur = 30;
+            if (tick >= 12 && dist > want + band) dur = 40;
             break;
           case 'kite':
             if (dist < want * 0.6) dur = 40;
@@ -363,10 +368,10 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
             if (hpPct < 0.35) dur = 45;
             break;
           case 'flank':
-            if (hpPct < 0.8) dur = 30;
+            if (hpPct < 0.8) dur = 36;
             break;
           case 'redshift':
-            if (hpPct < 0.7) dur = 30;
+            if (hpPct < 0.75) dur = 36;
             break;
         }
         if (dur > 0) {
@@ -615,17 +620,18 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
 
         let acc = wp.accuracy * me.s.accuracy * (1 - foe.s.jam);
         if (me.s.behavior === 'sniper' && !me.moving) acc *= 1.42;
-        if (me.s.behavior === 'turtle') acc *= 1.12;
+        if (me.s.behavior === 'turtle') acc *= 1.05;
         if (wp.type === 'explosive') acc *= arena.explosiveAccuracy;
         acc *= 1 - 0.25 * (dist / wp.maxRange);
         let ev = foe.s.evasion * (0.3 + 0.7 * Math.min(1, foe.moveFrac)) * (0.5 + 0.5 * (dist / wp.maxRange));
-        if (foe.s.behavior === 'kite' && foe.moving) ev *= 1.2;
+        if (foe.s.behavior === 'kite' && foe.moving) ev *= 1.1;
+        if (foe.s.behavior === 'flank' && foe.moving) ev *= 1.1;
         if (active(foe, 'kite')) {
           ev += 0.3;
           acc *= 0.7;
         }
         if (active(foe, 'flank')) ev += 0.5;
-        if (active(foe, 'redshift')) ev += 0.45;
+        if (active(foe, 'redshift')) ev += 0.5;
         if (stripped(foe)) ev += 0.1;
         if (active(me, 'redshift')) acc *= 1.15;
         if (foe.qbUntil > tick) ev += 0.3;
@@ -639,11 +645,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         let staggerFlag = false;
         if (hit) {
           dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
-          if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.86; // braced
+          if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.9; // braced
+          if (me.s.behavior === 'rush' && dist < 320) dmg *= 1.12; // up close and committed
           dmg *= me.dmgMult;
           if (crit) dmg *= 2.5;
           if (wp.charge) dmg *= 1 + Math.max(0, Math.min(1.2, closingSpeed / Math.max(60, me.s.speed)));
           if (active(me, 'berserk')) dmg *= 1.15;
+          if (active(me, 'rush') || active(me, 'flank')) dmg *= 1.2; // hits land harder at full tilt
+          if (tick > OVERTIME_TICK) dmg *= 1 + (tick - OVERTIME_TICK) / 150; // sudden death
           if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.25, (me.heat - 100) / 200);
           if (active(foe, 'turtle')) dmg *= 0.6;
           if (!stripped(foe)) dmg *= 1 - armorAgainst(foe.s, wp.type);
@@ -723,6 +732,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     for (let i = 0; i < 2; i++) {
       const m = mechs[i]!;
       if (m.hp > 0 || m.lastStand >= 0) continue;
+      if (!rng.chance(LAST_STAND_CHANCE)) continue;
       const o = mechs[1 - i]!;
       m.hp = 1;
       m.lastStand = tick;
