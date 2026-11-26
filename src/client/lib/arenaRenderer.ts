@@ -4,6 +4,7 @@ import type { Arena } from '../../shared/game/arenas';
 import { FRAME_EVERY, SPECIALS, type BattleResult, type ShotEvent } from '../../shared/game/battle';
 import { computeStats, type Build } from '../../shared/game/mech';
 import { getPart } from '../../shared/game/parts';
+import type { MechLayer } from '../components/mechLayers';
 import { createRng } from '../../shared/game/rng';
 import { sfx } from './sfx';
 
@@ -288,6 +289,24 @@ const drawProps = (g: CanvasRenderingContext2D, arena: Arena, w: number, h: numb
   }
 };
 
+export type MechSprites = {
+  normal: HTMLCanvasElement;
+  white: HTMLCanvasElement;
+  layers: Partial<Record<MechLayer, HTMLCanvasElement>>;
+};
+
+type Piece = {
+  img: HTMLCanvasElement;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  flip: boolean;
+  life: number;
+};
+
 export type Renderer = {
   draw: (t: number, dt: number) => boolean;
   /** Seconds of hit-stop requested by big impacts; the caller pauses sim time. */
@@ -299,9 +318,7 @@ export const createRenderer = (
   result: BattleResult,
   builds: [Build, Build],
   arena: Arena,
-  sprites: {
-    current: { normal: HTMLCanvasElement; white: HTMLCanvasElement }[];
-  },
+  sprites: { current: MechSprites[] },
   getTags: () => [string, string],
   getSpeed: () => number,
   bossSide: 0 | 1 | null = null
@@ -386,6 +403,22 @@ export const createRenderer = (
   const lastPos: { x: number; y: number }[] = [];
   let nextSpecial = 0;
   let nextMove = 0;
+  // animation state
+  const slotKick: Record<ShotEvent['slot'], number>[] = [
+    { weaponR: 0, weaponL: 0, back: 0 },
+    { weaponR: 0, weaponL: 0, back: 0 },
+  ];
+  const lastShot = [-99, -99];
+  const flinch = [
+    { until: 0, dir: 0 },
+    { until: 0, dir: 0 },
+  ];
+  const pieces: Piece[] = [];
+  const brokenUp = [false, false];
+  const vel = [
+    { x: 0, y: 0, ratio: 0 },
+    { x: 0, y: 0, ratio: 0 },
+  ];
   const qbUntil = [0, 0];
   const topSpeed = builds.map((b) => Math.max(40, computeStats(b, arena).speed));
   const trail: { x: number; y: number }[][] = [[], []];
@@ -494,6 +527,7 @@ export const createRenderer = (
         const vx = fr[i]!.x - prev[i]!.x; // metres per tick
         const vy = fr[i]!.y - prev[i]!.y;
         const v = Math.sqrt(vx * vx + vy * vy) * 10; // m/s
+        vel[i] = { x: vx * 10, y: vy * 10, ratio: v / topSpeed[i]! };
         if (v < 15 || t >= result.ticks) continue;
         const ratio = v / topSpeed[i]!;
         const p = pos[i]!;
@@ -569,6 +603,8 @@ export const createRenderer = (
         fx === 'rail' || fx === 'shell' ? 4 : fx === 'pellets' || fx === 'spike' ? 3 : fx === 'missiles' ? 2 : 1;
       if (kick >= recoil[ev.by]!.px || t > recoil[ev.by]!.until)
         recoil[ev.by] = { until: t + (kick > 2 ? 1.5 : 0.7), px: kick };
+      slotKick[ev.by]![ev.slot] = t + (kick > 2 ? 1.6 : 0.9);
+      lastShot[ev.by] = t;
       if (fx === 'tracer' || fx === 'bullet' || fx === 'pellets') {
         // ejected shell casing
         spawn(me.x, me.y, 1, ['#d9a441', '#8a6a2a'], 18, 0.5, 1, foe.x < me.x ? 0.8 : -0.8, -0.6, 0.3);
@@ -626,6 +662,7 @@ export const createRenderer = (
       }
       const big = ev.dmg > 140;
       flashUntil[victim] = t + 1.2;
+      flinch[victim] = { until: t + (big ? 1.4 : 0.8), dir: foe.x >= me.x ? 1 : -1 };
       if (!quiet) freeze = Math.max(freeze, ev.dmg > 300 ? 0.13 : big ? 0.07 : ev.type === 'melee' ? 0.05 : 0);
       if (ev.blocked) {
         shieldUntil[victim] = t + 2;
@@ -711,6 +748,28 @@ export const createRenderer = (
       const loser = pos[1 - result.winner]!;
       if (result.reason === 'ko') {
         freeze = 0.25;
+        const li: 0 | 1 = result.winner === 0 ? 1 : 0;
+        const lsp = sprites.current[li];
+        if (lsp) {
+          brokenUp[li] = true;
+          const names: MechLayer[] = ['back', 'legs', 'armR', 'armL', 'body'];
+          const away = loser.x >= pos[result.winner]!.x ? 1 : -1;
+          names.forEach((name, k) => {
+            const img = lsp.layers[name];
+            if (!img) return;
+            pieces.push({
+              img,
+              x: loser.x,
+              y: loser.y + (name === 'legs' ? 4 : 0),
+              z: 0,
+              vx: (rng.next() - 0.5) * 70 + away * (name === 'legs' ? 5 : 35),
+              vy: (rng.next() - 0.5) * 40,
+              vz: name === 'legs' ? 20 : 70 + rng.next() * 90 + k * 10,
+              flip: facing[li] === -1,
+              life: 6,
+            });
+          });
+        }
         sfx.ko();
         shake = 8;
         flash = 0.2;
@@ -824,18 +883,68 @@ export const createRenderer = (
         g.fillStyle = 'rgba(228,87,46,0.35)';
         g.fillRect(x - SW / 2 - 2, y - SH / 2 - 2, SW + 4, SH + 4);
       }
-      g.save();
-      const rc = recoil[i]!;
-      const kickBack = t < rc.until ? Math.round(rc.px * ((rc.until - t) / (rc.px > 2 ? 1.5 : 0.7))) : 0;
-      g.translate(x - facing[i]! * kickBack, y + bobY);
-      if (facing[i] === -1) g.scale(-1, 1);
-      if (m.hp <= 0) g.globalAlpha = 0.35;
-      if (sp) g.drawImage(t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0 ? sp.white : sp.normal, -SW / 2, -SH / 2);
-      else {
-        g.fillStyle = '#888';
-        g.fillRect(-8, -12, 16, 24);
+      if (!brokenUp[i]) {
+        g.save();
+        const rc = recoil[i]!;
+        const kickBack = t < rc.until ? Math.round(rc.px * ((rc.until - t) / (rc.px > 2 ? 1.5 : 0.7))) : 0;
+        const fl = flinch[i]!;
+        const flinchPx = t < fl.until ? Math.round(2 * ((fl.until - t) / 1.4) + 0.5) * fl.dir : 0;
+        g.translate(x - facing[i]! * kickBack + flinchPx, y + bobY);
+        if (facing[i] === -1) g.scale(-1, 1);
+        if (m.hp <= 0) g.globalAlpha = 0.35;
+        const flashing = t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0;
+        if (!sp) {
+          g.fillStyle = '#888';
+          g.fillRect(-8, -12, 16, 24);
+        } else if (flashing || !sp.layers.body) {
+          g.drawImage(flashing ? sp.white : sp.normal, -SW / 2, -SH / 2);
+        } else {
+          // ── layered, animated mech (local +x = toward the enemy) ──
+          const L = sp.layers;
+          const ox = -SW / 2;
+          const oy = -SH / 2;
+          const v = vel[i]!;
+          const fwd = (v.x * facing[i]!) / Math.max(1, topSpeed[i]!);
+          const lean = m.moving ? Math.max(-1, Math.min(2, Math.round(fwd * (v.ratio > 1.3 ? 2.5 : 1.5)))) : 0;
+          const step = Math.floor(walked[i]! / 6) % 2;
+          const walking = m.moving && (leg === 'biped' || leg === 'reverse' || leg === 'quad');
+          const torsoBob = walking && step === 1 ? -1 : 0;
+          const aiming = t - lastShot[i]! < 14 ? -1 : 0;
+          const kickOf = (slot: ShotEvent['slot']) => {
+            const k = slotKick[i]![slot] - t;
+            return k > 0 ? Math.ceil(Math.min(3, k * 2.2)) : 0;
+          };
+          const backK = kickOf('back');
+          const rK = kickOf('weaponR');
+          const lK = kickOf('weaponL');
+          if (L.back) g.drawImage(L.back, ox + lean - backK, oy + torsoBob + Math.min(1, backK));
+          if (L.legs) {
+            if (walking) {
+              // left and right halves step out of phase
+              const half = Math.floor(L.legs.width / 2);
+              const lh = L.legs.height;
+              g.drawImage(L.legs, 0, 0, half, lh, ox, oy + (step === 0 ? -1 : 0), half, lh);
+              g.drawImage(
+                L.legs,
+                half,
+                0,
+                L.legs.width - half,
+                lh,
+                ox + half,
+                oy + (step === 1 ? -1 : 0),
+                L.legs.width - half,
+                lh
+              );
+            } else if (leg === 'tank' && m.moving) {
+              g.drawImage(L.legs, ox + (Math.floor(walked[i]! / 3) % 2), oy);
+            } else g.drawImage(L.legs, ox, oy);
+          }
+          if (L.armL) g.drawImage(L.armL, ox + lean - lK, oy + torsoBob + aiming);
+          if (L.armR) g.drawImage(L.armR, ox + lean - rK, oy + torsoBob + aiming);
+          if (L.body) g.drawImage(L.body, ox + lean, oy + torsoBob);
+        }
+        g.restore();
       }
-      g.restore();
 
       if (act && act.kind === 'turtle') {
         g.strokeStyle = Math.floor(t * 4) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
@@ -889,6 +998,34 @@ export const createRenderer = (
         g.fillStyle = '#e4572e';
         g.fillText('HOT', x, ty - 10);
       }
+    }
+
+    // KO wreckage flying apart
+    for (let k = pieces.length - 1; k >= 0; k--) {
+      const pc = pieces[k]!;
+      pc.life -= dt;
+      pc.vz -= 300 * dt;
+      pc.z += pc.vz * dt;
+      if (pc.z < 0) {
+        pc.z = 0;
+        if (Math.abs(pc.vz) > 30) {
+          spawn(pc.x, pc.y + SPRITE_H / 2 - 2, 3, [theme.speck, theme.dark], 14, 0.4, 2);
+          shake = Math.max(shake, 1);
+        }
+        pc.vz = -pc.vz * 0.3;
+        pc.vx *= 0.6;
+        pc.vy *= 0.6;
+      }
+      pc.x += pc.vx * dt;
+      pc.y += pc.vy * dt;
+      if (rng.chance(0.25)) spawn(pc.x, pc.y - pc.z, 1, ['#6e675c', '#3d3a34'], 6, 0.9, 2, 0, -0.4, 0.4, 1.5);
+      g.save();
+      g.globalAlpha = Math.min(1, pc.life / 1.5) * 0.9;
+      g.translate(Math.round(pc.x), Math.round(pc.y - pc.z));
+      if (pc.flip) g.scale(-1, 1);
+      g.drawImage(pc.img, -pc.img.width / 2, -pc.img.height / 2);
+      g.restore();
+      if (pc.life <= 0) pieces.splice(k, 1);
     }
 
     // projectiles in flight + beams
@@ -1153,7 +1290,7 @@ export const createRenderer = (
     g.restore();
 
     lastT = t;
-    return particles.length > 0 || shake > 0.2 || flash > 0;
+    return particles.length > 0 || pieces.length > 0 || shake > 0.2 || flash > 0;
   };
 
   return {

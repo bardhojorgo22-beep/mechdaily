@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Build } from '../../shared/game/mech';
 import { MechArt } from '../components/MechArt';
+import type { MechLayer } from '../components/mechLayers';
 
 // Turns the vector mech into a crunchy low-res pixel sprite.
 // Each art pixel is about PIXEL css pixels on screen.
@@ -9,8 +10,8 @@ export const PIXEL = 2;
 
 const cache = new Map<string, Promise<HTMLCanvasElement>>();
 
-const svgMarkup = (build: Build): string => {
-  const out = renderToStaticMarkup(createElement(MechArt, { build, size: 200 }));
+const svgMarkup = (build: Build, only?: MechLayer): string => {
+  const out = renderToStaticMarkup(createElement(MechArt, { build, size: 200, ...(only ? { only } : {}) }));
   return out.includes('xmlns=') ? out : out.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
 };
 
@@ -50,13 +51,13 @@ const rasterize = (markup: string, w: number): Promise<HTMLCanvasElement> =>
   });
 
 /** Pixel sprite for a build, `w` art-pixels wide. Cached. */
-export const mechSprite = (build: Build, w: number): Promise<HTMLCanvasElement> => {
-  const key = `${w}:${JSON.stringify(build.parts)}:${JSON.stringify(build.paint)}`;
+export const mechSprite = (build: Build, w: number, only?: MechLayer): Promise<HTMLCanvasElement> => {
+  const key = `${w}:${only ?? 'all'}:${JSON.stringify(build.parts)}:${JSON.stringify(build.paint)}`;
   let p = cache.get(key);
   if (!p) {
-    p = rasterize(svgMarkup(build), w);
+    p = rasterize(svgMarkup(build, only), w);
     cache.set(key, p);
-    if (cache.size > 80) cache.delete(cache.keys().next().value ?? '');
+    if (cache.size > 200) cache.delete(cache.keys().next().value ?? '');
   }
   return p;
 };

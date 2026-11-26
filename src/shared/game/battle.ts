@@ -471,7 +471,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (foe.s.behavior === 'rush') dmg *= 1.08; // reckless
           dmg *= me.dmgMult;
           if (crit) dmg *= 3.5;
-          if (active(me, 'berserk')) dmg *= 1.25;
+          if (active(me, 'berserk')) dmg *= 1.15;
           if (active(foe, 'turtle')) dmg *= 0.5;
           dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;

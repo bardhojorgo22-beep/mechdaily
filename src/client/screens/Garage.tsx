@@ -137,7 +137,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
           <Bar label="HP" value={st.hp} max={6000} text={`${st.hp}`} />
           <Bar label="ARMOR K" value={st.armorK} max={0.65} text={pct(st.armorK)} />
           <Bar label="ARMOR E" value={st.armorE} max={0.65} text={pct(st.armorE)} />
-          <Bar label="SPEED" value={st.speed} max={130} text={`${Math.round(st.speed)} m/s`} />
+          <Bar label="SPEED" value={st.speed} max={95} text={`${Math.round(st.speed)} m/s`} />
           <Bar
             label="WEIGHT"
             value={st.weight}

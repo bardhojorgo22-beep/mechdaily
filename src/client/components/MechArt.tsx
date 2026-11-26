@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { MechLayer } from './mechLayers';
 import { BODY_COLORS, DECALS, TRIM_COLORS, type Build } from '../../shared/game/mech';
 
 // Chunky "sticker" style: flat fills, thick ink outlines, no gradients.
@@ -331,9 +332,11 @@ type Props = {
   size?: number;
   flip?: boolean;
   className?: string;
+  /** Render just one moving part (for the animated battle sprites). */
+  only?: MechLayer;
 };
 
-export const MechArt = ({ build, size = 200, flip = false, className }: Props) => {
+export const MechArt = ({ build, size = 200, flip = false, className, only }: Props) => {
   const body = BODY_COLORS[build.paint.body] ?? BODY_COLORS[0]!;
   const trim = TRIM_COLORS[build.paint.trim] ?? TRIM_COLORS[0]!;
   const c: Ctx = { body, trim, dark: shade(body, 0.62) };
@@ -349,16 +352,18 @@ export const MechArt = ({ build, size = 200, flip = false, className }: Props) =
       role="img"
       aria-label={`${build.name} mech`}
     >
-      <ellipse cx={100} cy={212} rx={66} ry={6} fill={INK} opacity={0.15} />
-      {BACKS[p.back]?.(c)}
-      {LEGS[p.legs]?.(c)}
-      {arm(p.arms, -1, c)}
-      {arm(p.arms, 1, c)}
-      {CORES[p.core]?.(c)}
-      {decal(build.paint.decal, c)}
-      {HEADS[p.head]?.(c)}
-      {HAND_WEAPONS[p.weaponR]?.(58 - armW / 2, c)}
-      {HAND_WEAPONS[p.weaponL]?.(142 + armW / 2, c)}
+      {!only && <ellipse cx={100} cy={212} rx={66} ry={6} fill={INK} opacity={0.15} />}
+      {(!only || only === 'back') && BACKS[p.back]?.(c)}
+      {(!only || only === 'legs') && LEGS[p.legs]?.(c)}
+      {(!only || only === 'armR') && arm(p.arms, -1, c)}
+      {(!only || only === 'armL') && arm(p.arms, 1, c)}
+      {only === 'armR' && HAND_WEAPONS[p.weaponR]?.(58 - armW / 2, c)}
+      {only === 'armL' && HAND_WEAPONS[p.weaponL]?.(142 + armW / 2, c)}
+      {(!only || only === 'body') && CORES[p.core]?.(c)}
+      {(!only || only === 'body') && decal(build.paint.decal, c)}
+      {(!only || only === 'body') && HEADS[p.head]?.(c)}
+      {!only && HAND_WEAPONS[p.weaponR]?.(58 - armW / 2, c)}
+      {!only && HAND_WEAPONS[p.weaponL]?.(142 + armW / 2, c)}
     </svg>
   );
 };

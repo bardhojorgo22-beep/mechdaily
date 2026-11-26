@@ -226,8 +226,8 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   const legSpeed = arena.legSpeed[legType] ?? 1;
   // Heavier mechs are slower even under the limit.
   const massFactor = 1 / (1 + weight / 160);
-  const speed = thrust * mobility * weightFactor * legSpeed * arena.speed * massFactor * 1.35;
-  const evasion = clamp((speed / 520) * legEvasion * (arena.evasion[legType] ?? 1), 0, 0.55);
+  const speed = thrust * mobility * weightFactor * legSpeed * arena.speed * massFactor * 0.6;
+  const evasion = clamp((speed / 231) * legEvasion * (arena.evasion[legType] ?? 1), 0, 0.55);
 
   return {
     hp: Math.round(hp),
@@ -244,7 +244,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
     energyCap: capacity,
     energyRegen: output * arena.genOutput - drain,
     boostDrain: boostDrain * arena.boostDrain,
-    qbSpeed: (qbPower * mobility * weightFactor * legSpeed * arena.speed) / (1 + weight / 140),
+    qbSpeed: (0.8 * qbPower * mobility * weightFactor * legSpeed * arena.speed) / (1 + weight / 140),
     qbCooldown,
     qbCost: qbCost * arena.boostDrain,
     cooling: cooling * arena.cooling,

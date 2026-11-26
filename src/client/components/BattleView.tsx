@@ -2,7 +2,16 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Arena } from '../../shared/game/arenas';
 import { TICKS_PER_SECOND, type BattleResult } from '../../shared/game/battle';
 import type { Build } from '../../shared/game/mech';
-import { BOSS_SPRITE_W, RES_W, SPRITE_W, THEMES, createRenderer, frameAt } from '../lib/arenaRenderer';
+import {
+  BOSS_SPRITE_W,
+  RES_W,
+  SPRITE_W,
+  THEMES,
+  createRenderer,
+  frameAt,
+  type MechSprites,
+} from '../lib/arenaRenderer';
+import { MECH_LAYERS } from './mechLayers';
 import { isMuted, onMuteChange, setMuted, sfx } from '../lib/sfx';
 import { mechSprite } from '../lib/sprite';
 import { PixelMech } from './PixelMech';
@@ -55,7 +64,7 @@ export const BattleView = ({
   const tickRef = useRef(0);
   const speedRef = useRef(1);
   const tagsRef = useRef(tags);
-  const sprites = useRef<{ normal: HTMLCanvasElement; white: HTMLCanvasElement }[]>([]);
+  const sprites = useRef<MechSprites[]>([]);
   useEffect(() => {
     speedRef.current = speed;
     tagsRef.current = tags;
@@ -70,9 +79,21 @@ export const BattleView = ({
   const H = Math.round((RES_W * arena.height) / arena.width);
 
   useEffect(() => {
-    Promise.all(builds.map((b, i) => mechSprite(b, i === bossSide ? BOSS_SPRITE_W : SPRITE_W)))
+    Promise.all(
+      builds.map(async (b, i) => {
+        const w = i === bossSide ? BOSS_SPRITE_W : SPRITE_W;
+        const normal = await mechSprite(b, w);
+        const layers: MechSprites['layers'] = {};
+        await Promise.all(
+          MECH_LAYERS.map(async (name) => {
+            layers[name] = await mechSprite(b, w, name);
+          })
+        );
+        return { normal, white: whiteOf(normal), layers };
+      })
+    )
       .then((cs) => {
-        sprites.current = cs.map((c) => ({ normal: c, white: whiteOf(c) }));
+        sprites.current = cs;
       })
       .catch(() => undefined);
   }, [builds, bossSide]);
