@@ -565,7 +565,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.86; // braced
           dmg *= me.dmgMult;
-          if (crit) dmg *= 3.5;
+          if (crit) dmg *= 2.5;
           if (wp.charge) dmg *= 1 + Math.max(0, Math.min(1.2, closingSpeed / Math.max(60, me.s.speed)));
           if (active(me, 'berserk')) dmg *= 1.15;
           if (active(foe, 'turtle')) dmg *= 0.6;
@@ -581,6 +581,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               blocked = true;
             }
           }
+          // a charged shot is a big moment, never a one-shot
+          if (crit) dmg = Math.min(dmg, foe.s.hp * 0.35);
           // stopping power: a big ranged hit stops a charging mech in its tracks
           const charging = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.2;
           const staggerTicks =
