@@ -15,7 +15,7 @@ import type {
 } from '../shared/api';
 import { getArena, type Arena } from '../shared/game/arenas';
 import { simulateBattle, type BattleResult } from '../shared/game/battle';
-import { botsForDay } from '../shared/game/bots';
+import { sparringForDay } from '../shared/game/bots';
 import { bossForDay, simulateRaid } from '../shared/game/boss';
 import { FACTIONS, FACTION_IDS, type FactionId } from '../shared/game/factions';
 import { DEFAULT_BUILD, validateBuild, type Build, type Tax } from '../shared/game/mech';
@@ -280,6 +280,8 @@ export const App = () => {
   }, [load]);
 
   const arena = useMemo(() => getArena(data?.arenaId ?? 'yard'), [data?.arenaId]);
+  const day = data?.day;
+  const sparring = useMemo(() => (day ? sparringForDay(day, arena) : []), [day, arena]);
   const tax: Tax = data?.tax ?? {};
   const isOldPost = data ? data.postDay !== data.day : false;
 
@@ -612,7 +614,6 @@ export const App = () => {
     );
 
   const needFaction = !!data.username && !data.faction && !isOldPost;
-  const sparring = botsForDay(`${data.day}:spar`, 3);
 
   return (
     <div className="grid-paper min-h-screen">
@@ -797,18 +798,24 @@ export const App = () => {
             </div>
             <div className="text-xs">Fights happen in today's arena: {arena.name}. Nothing here counts.</div>
             <div className="text-[11px] font-semibold text-mute">SPARRING BOTS</div>
-            {sparring.map((b, i) => (
+            {sparring.map(({ build: b, level }) => (
               <button
-                key={i}
+                key={level}
                 className="sticker p-2 flex items-center gap-3 text-left"
-                onClick={() => practice(b, 'sparring bot')}
+                onClick={() => practice(b, `${level} bot`)}
               >
                 <PixelMech build={b} size={56} />
                 <div className="flex-1">
-                  <div className="font-display font-black text-lg leading-none">{b.name}</div>
-                  <div className="text-[11px] text-mute">
-                    {getPart(b.parts.chip).name} · {getPart(b.parts.weaponR).name} + {getPart(b.parts.back).name}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="tag text-white"
+                      style={{ background: level === 'easy' ? '#2f7d1f' : level === 'medium' ? '#c98a00' : '#c0392b' }}
+                    >
+                      {level}
+                    </span>
+                    <span className="font-display font-black text-lg leading-none">{b.name}</span>
                   </div>
+                  <div className="text-[11px] text-mute mt-0.5">“{buildTitle(b, arena)}”</div>
                 </div>
                 <span className="font-display font-black">FIGHT →</span>
               </button>
