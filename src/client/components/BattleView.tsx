@@ -161,10 +161,19 @@ export const BattleView = ({
       highlights,
       (h) => {
         const id = ++calloutId.current;
-        setCallouts((cs) => [...cs.slice(-2), { ...h, id }]);
+        // one lane per kind: the finale owns the screen, a big moment takes the top banner
+        // (newest wins), small ones go to a little feed on the side of whoever did it
+        setCallouts((cs) => {
+          if (h.tier === 3) return [{ ...h, id }];
+          if (cs.some((c) => c.tier === 3)) return cs;
+          if (h.tier === 2) return [...cs.filter((c) => c.tier !== 2), { ...h, id }];
+          const mine = cs.filter((c) => c.tier === 1 && c.by === h.by);
+          const drop = mine.length >= 2 ? mine[0]!.id : -1;
+          return [...cs.filter((c) => c.id !== drop), { ...h, id }];
+        });
         setTimeout(
           () => setCallouts((cs) => cs.filter((c) => c.id !== id)),
-          h.tier === 3 ? 3200 : h.tier === 2 ? 1700 : 1200
+          h.tier === 3 ? 3200 : h.tier === 2 ? 1500 : 1300
         );
       }
     );
@@ -275,37 +284,69 @@ export const BattleView = ({
             </div>
           ) : null;
         })()}
-        {callouts.map((c, k) => {
+        {callouts.map((c) => {
           const mine = tags[c.by] === 'YOU';
           const enemyOfYou = tags[c.by === 0 ? 1 : 0] === 'YOU';
           const color = mine ? '#ffc914' : enemyOfYou ? '#ff6b4a' : '#f8f4ec';
-          const big = c.tier >= 2;
+          const who =
+            tags[c.by] === 'YOU' ? 'YOUR MECH' : tags[c.by] === 'BOSS' ? 'THE BOSS' : builds[c.by]!.name.toUpperCase();
+          const outline = '2px 2px 0 #1b1a17, -1px -1px 0 #1b1a17, 1px -1px 0 #1b1a17, -1px 1px 0 #1b1a17';
+          if (c.tier === 1) {
+            // small feed chip, on the side of the mech that did it, low on the screen
+            const k = callouts.filter((o) => o.tier === 1 && o.by === c.by).findIndex((o) => o.id === c.id);
+            return (
+              <div
+                key={c.id}
+                className="absolute pointer-events-none pop"
+                style={{ bottom: `${6 + k * 22}px`, [c.by === 0 ? 'left' : 'right']: '6px' }}
+              >
+                <div
+                  className="font-display whitespace-nowrap px-1.5 py-0.5"
+                  style={{ fontSize: 'min(3.6vw, 14px)', color, background: 'rgba(27,26,23,0.82)' }}
+                >
+                  {c.text}
+                  {c.sub ? <span className="text-[10px] opacity-80"> {c.sub}</span> : null}
+                </div>
+              </div>
+            );
+          }
+          if (c.tier === 2) {
+            // one headline banner across the top
+            return (
+              <div key={c.id} className="absolute inset-x-0 top-5 flex flex-col items-center pointer-events-none">
+                <div
+                  className="font-display stamp whitespace-nowrap"
+                  style={{ fontSize: 'min(6.5vw, 26px)', color, textShadow: outline, letterSpacing: '0.02em' }}
+                >
+                  {c.text}
+                </div>
+                <div className="font-display text-[10px] px-1.5" style={{ background: '#1b1a17', color }}>
+                  {c.sub ? `${c.sub} · ` : ''}
+                  {who}
+                </div>
+              </div>
+            );
+          }
           return (
             <div
               key={c.id}
               className="absolute inset-x-0 flex flex-col items-center pointer-events-none"
-              style={{ top: c.tier === 3 ? '30%' : `${12 + k * 18}%` }}
+              style={{ top: '30%' }}
             >
               <div
                 className="font-display stamp whitespace-nowrap"
                 style={{
-                  fontSize: c.tier === 3 ? 'min(11vw, 46px)' : big ? 'min(8vw, 32px)' : 'min(6vw, 22px)',
+                  fontSize: 'min(11vw, 46px)',
                   color,
                   transform: `rotate(${c.by === 0 ? -4 : 4}deg)`,
                   textShadow: '3px 3px 0 #1b1a17, -2px -2px 0 #1b1a17, 2px -2px 0 #1b1a17, -2px 2px 0 #1b1a17',
-                  letterSpacing: '0.02em',
                 }}
               >
                 {c.text}
               </div>
-              {(c.sub || big) && (
+              {c.sub && (
                 <div className="font-display text-xs mt-1 px-2 py-0.5" style={{ background: '#1b1a17', color }}>
-                  {c.sub ? `${c.sub} · ` : ''}
-                  {tags[c.by] === 'YOU'
-                    ? 'YOUR MECH'
-                    : tags[c.by] === 'BOSS'
-                      ? 'THE BOSS'
-                      : builds[c.by]!.name.toUpperCase()}
+                  {c.sub} · {who}
                 </div>
               )}
             </div>
