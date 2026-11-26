@@ -441,8 +441,30 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         const nearWall = me.x < 120 || me.x > W - 120 || me.y < 90 || me.y > H - 90;
         if (radial < 0 && nearWall) orbit = Math.max(orbit, 0.95);
         else if (radial < -0.3) orbit = Math.max(orbit, 0.8); // kite in an arc, not a straight line
-        let mx = ux * radial + tx * orbit;
-        let my = uy * radial + ty * orbit;
+        // walls push back: the closer the wall, the harder the pilot steers off it
+        const WALL = 220;
+        let wx = 0;
+        let wy = 0;
+        if (me.x < WALL) wx += (WALL - me.x) / WALL;
+        if (me.x > W - WALL) wx -= (me.x - (W - WALL)) / WALL;
+        if (me.y < WALL * 0.75) wy += (WALL * 0.75 - me.y) / (WALL * 0.75);
+        if (me.y > H - WALL * 0.75) wy -= (me.y - (H - WALL * 0.75)) / (WALL * 0.75);
+        const wallPush = Math.sqrt(wx * wx + wy * wy);
+        let rad = radial;
+        if (wallPush > 0.05) {
+          // circle toward open space, not along the wall into a corner
+          const open = tx * (W / 2 - me.x) + ty * (H / 2 - me.y);
+          if (open < 0) {
+            me.strafeSign *= -1;
+            tx = -tx;
+            ty = -ty;
+          }
+          // backing straight into a wall gains nothing: stop retreating that way
+          const intoWall = -(ux * wx + uy * wy) / wallPush; // >0 when retreating pushes into the wall
+          if (rad < 0 && intoWall > 0) rad *= 1 - Math.min(1, wallPush) * intoWall;
+        }
+        let mx = ux * rad + tx * orbit + wx * 1.4;
+        let my = uy * rad + ty * orbit + wy * 1.4;
         const mag = Math.sqrt(mx * mx + my * my);
         if (mag > 1) {
           mx /= mag;
