@@ -1,7 +1,7 @@
 // Pixel-art renderer for a battle replay. Everything is drawn at a low
 // internal resolution and scaled up with nearest-neighbour by CSS.
 import type { Arena } from '../../shared/game/arenas';
-import { FRAME_EVERY, SPECIALS, type BattleResult, type ShotEvent } from '../../shared/game/battle';
+import { FRAME_EVERY, REDSHIFT_CRASH, SPECIALS, type BattleResult, type ShotEvent } from '../../shared/game/battle';
 import { computeStats, type Build } from '../../shared/game/mech';
 import { getPart } from '../../shared/game/parts';
 import type { MechLayer } from '../components/mechLayers';
@@ -454,6 +454,30 @@ export const createRenderer = (
   const qbUntil = [0, 0];
   const topSpeed = builds.map((b) => Math.max(40, computeStats(b, arena).speed));
   const trail: { x: number; y: number }[][] = [[], []];
+  // Redshift: rainbow light-trail afterimages + world slow-mo
+  const RS_COLORS = ['#ff2e63', '#ffd23f', '#3cf0ec', '#9b5cff'];
+  const tintCache = new Map<string, HTMLCanvasElement>();
+  const tinted = (src: HTMLCanvasElement, color: string, key: string) => {
+    const k = `${key}:${color}`;
+    let c = tintCache.get(k);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = src.width;
+      c.height = src.height;
+      const cg = c.getContext('2d')!;
+      cg.drawImage(src, 0, 0);
+      cg.globalCompositeOperation = 'source-in';
+      cg.fillStyle = color;
+      cg.fillRect(0, 0, c.width, c.height);
+      tintCache.set(k, c);
+    }
+    return c;
+  };
+  const rsTrail: { x: number; y: number }[][] = [[], []];
+  let redshiftUntilT = -1;
+  let curT = 0;
+  const crashed = new Set<number>();
+  const magnetOf = builds.map((b) => b.parts.back === 'bk-magnet');
   let lastT = 0;
   const legTypes = builds.map((b) => {
     const p = getPart(b.parts.legs);
@@ -488,6 +512,7 @@ export const createRenderer = (
   };
 
   const draw = (t: number, dt: number): boolean => {
+    curT = t;
     const fr = frameAt(result, t);
     const pos = fr.map((m) => ({ x: m.x * sc, y: m.y * sc }));
     // Melee fights put mechs on top of each other; ease them apart visually
@@ -624,7 +649,24 @@ export const createRenderer = (
             : ['#ffffff', '#ffd23f', '#e4572e'];
       spawn(p.x, p.y, 18, cols, 45, 0.5, 2);
       if (sp.kind === 'kite') spawn(p.x, p.y, 30, ['#f4f0e6', '#d6d1c4', '#a9a497'], 22, 2.2, 4, 0, 0, 1, 3);
+      if (sp.kind === 'redshift') {
+        redshiftUntilT = sp.until;
+        sfx.redshift();
+        spawn(p.x, p.y, 40, RS_COLORS, 70, 0.6, 2);
+        shake = Math.max(shake, 4);
+      }
       shake = Math.max(shake, 2);
+    }
+    // Redshift crash: the overclock comes due
+    for (const sp of result.specials) {
+      if (sp.kind !== 'redshift' || crashed.has(sp.t) || t < sp.until) continue;
+      crashed.add(sp.t);
+      if (t - sp.until > 5) continue;
+      const p = pos[sp.by]!;
+      sfx.crash();
+      bursts.push({ x: p.x, y: p.y - 6, t, word: 'CRASH!', big: true });
+      spawn(p.x, p.y, 26, ['#f4f0e6', '#c9c4b8', '#ff6b4a'], 30, 1.4, 3, 0, -1, 0.6, 2);
+      shake = Math.max(shake, 3);
     }
     const specialActive = (i: number) =>
       result.specials.find((sp) => sp.by === i && t >= sp.t && t < Math.max(sp.until, sp.t + 1)) ?? null;
@@ -947,6 +989,33 @@ export const createRenderer = (
           });
         }
       } else trail[i] = [];
+      // Redshift: long rainbow smear of past positions
+      if (act && act.kind === 'redshift') {
+        const tr = rsTrail[i]!;
+        tr.unshift({ x, y: y + bobY });
+        if (tr.length > 20) tr.pop();
+        if (sp) {
+          for (let k = tr.length - 1; k >= 1; k--) {
+            if (k % 4 !== 0) continue;
+            const pt = tr[k]!;
+            g.save();
+            g.globalAlpha = 0.7 - k * 0.03;
+            g.translate(pt.x, pt.y);
+            if (facing[i] === -1) g.scale(-1, 1);
+            g.drawImage(tinted(sp.white, RS_COLORS[(k / 4 + Math.floor(t * 2)) % 4]!, `rs${i}`), -SW / 2, -SH / 2);
+            g.restore();
+          }
+        }
+        if (rng.chance(0.5)) spawn(x, y, 1, RS_COLORS, 6, 0.5, 1);
+      } else rsTrail[i] = [];
+      // Redshift crash: steaming, sparking, frozen
+      const crash = result.specials.find(
+        (s2) => s2.by === i && s2.kind === 'redshift' && t >= s2.until && t < s2.until + REDSHIFT_CRASH
+      );
+      if (crash && rng.chance(0.6)) {
+        spawn(x + (rng.next() - 0.5) * SW * 0.6, y - SH * 0.2, 1, ['#f4f0e6', '#c9c4b8'], 10, 0.8, 2, 0, -1, 0.4, 1);
+        if (rng.chance(0.3)) spawn(x, y, 2, ['#ffd23f', '#ffffff'], 30, 0.2, 1);
+      }
       if (act && act.kind === 'berserk' && Math.floor(t * 3) % 2 === 0) {
         g.fillStyle = 'rgba(228,87,46,0.35)';
         g.fillRect(x - SW / 2 - 2, y - SH / 2 - 2, SW + 4, SH + 4);
@@ -1399,6 +1468,33 @@ export const createRenderer = (
       if (a < 0.7 || Math.floor(t * 4) % 2 === 0) g.fillText(txt, Math.round(to.x + jx), yy);
     }
 
+    // grav anchor: field lines between the magnet and its target
+    for (let i = 0; i < 2; i++) {
+      if (!magnetOf[i]) continue;
+      const a = pos[i]!;
+      const b = pos[1 - i]!;
+      const ddx = b.x - a.x;
+      const ddy = b.y - a.y;
+      const d = Math.sqrt(ddx * ddx + ddy * ddy);
+      if (d * (1 / sc) < 110 || d * (1 / sc) > 620) continue;
+      // pulling or pushing? compare to a moment ago
+      const before = frameAt(result, Math.max(0, t - 0.6));
+      const d0 = Math.hypot((before[1]!.x - before[0]!.x) * sc, (before[1]!.y - before[0]!.y) * sc);
+      const pulling = d <= d0;
+      const flow = ((t * 1.6) % 1) * (pulling ? -1 : 1);
+      g.globalAlpha = 0.6;
+      for (let k = 0; k < 6; k++) {
+        let f = (k / 6 + flow + 1) % 1;
+        if (f < 0) f += 1;
+        const wob = Math.sin(f * Math.PI * 3 + t * 6) * 4 * Math.sin(f * Math.PI);
+        const px2 = a.x + ddx * f + (-ddy / d) * wob;
+        const py2 = a.y + ddy * f + (ddx / d) * wob;
+        g.fillStyle = k % 2 === 0 ? '#3cf0ec' : '#9b5cff';
+        g.fillRect(Math.round(px2) - 1, Math.round(py2) - 1, 2, 2);
+      }
+      g.globalAlpha = 1;
+    }
+
     // comic impact words + shockwave rings for melee hits
     for (let k = bursts.length - 1; k >= 0; k--) {
       const b = bursts[k]!;
@@ -1453,7 +1549,13 @@ export const createRenderer = (
         g.fillStyle = '#1b1a17';
         g.fillRect(Math.round(p.x - w2 / 2) - 1, yy - 2, w2 + 2, 12);
         g.fillStyle =
-          sp.kind === 'turtle' || sp.kind === 'flank' ? '#3cf0ec' : sp.kind === 'kite' ? '#f4f0e6' : '#ffc914';
+          sp.kind === 'redshift'
+            ? RS_COLORS[Math.floor(t * 3) % 4]!
+            : sp.kind === 'turtle' || sp.kind === 'flank'
+              ? '#3cf0ec'
+              : sp.kind === 'kite'
+                ? '#f4f0e6'
+                : '#ffc914';
         g.fillRect(Math.round(p.x - w2 / 2), yy - 1, w2, 10);
         g.fillStyle = '#1b1a17';
         g.fillText(label, Math.round(p.x), yy);
@@ -1527,6 +1629,6 @@ export const createRenderer = (
       freeze = 0;
       return f;
     },
-    timeScale: () => (performance.now() < slowUntil ? slowFactor : 1),
+    timeScale: () => Math.min(performance.now() < slowUntil ? slowFactor : 1, curT < redshiftUntilT ? 0.5 : 1),
   };
 };

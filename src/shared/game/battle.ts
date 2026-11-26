@@ -38,7 +38,7 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
   },
   sniper: {
     name: 'Charged Shot',
-    blurb: 'Once planted: next long-range shot hits for triple and rarely misses.',
+    blurb: 'Once planted: next long-range shot hits for 2.5x (max 35% of their HP) and rarely misses.',
   },
   berserk: {
     name: 'Rage',
@@ -48,7 +48,15 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
     name: 'Afterburner',
     blurb: 'Below 75% HP: 2.5s sprint around the enemy, very hard to hit.',
   },
+  redshift: {
+    name: 'Redshift',
+    blurb:
+      'Below 70% HP: 3s where the pilot moves and shoots twice as fast, leaving light trails. Then the frame crashes: overheats and freezes for a second.',
+  },
 };
+
+/** Ticks a Redshift crash lasts after the burst ends. */
+export const REDSHIFT_CRASH = 8;
 
 /** Movement bursts, for visuals: quick boost (sideways dash) or overboost (long charge). */
 export type MoveEvent = { t: number; by: 0 | 1; kind: 'qb' | 'ob'; dx: number; dy: number };
@@ -257,6 +265,7 @@ const ORBIT: Record<MechStats['behavior'], number> = {
   sniper: 0.3,
   berserk: 0.35,
   flank: 0.95,
+  redshift: 0.7,
 };
 
 export type Fighter = {
@@ -346,6 +355,9 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           case 'flank':
             if (hpPct < 0.8) dur = 30;
             break;
+          case 'redshift':
+            if (hpPct < 0.7) dur = 30;
+            break;
         }
         if (dur > 0) {
           me.specialUsed = true;
@@ -362,10 +374,19 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       // Circle-strafe around the target at the preferred range, quick boost
       // sideways to dodge, overboost in a straight line to close big gaps.
       const by: 0 | 1 = i === 0 ? 0 : 1;
+      if (me.s.behavior === 'redshift' && me.specialUsed && tick === me.specialUntil) {
+        // the crash: everything the overclock borrowed comes due
+        me.heat += 80;
+        me.energy *= 0.3;
+        me.planted = Math.max(me.planted, REDSHIFT_CRASH);
+        me.vx *= 0.2;
+        me.vy *= 0.2;
+      }
       const boostCost = me.s.boostDrain * DT;
       let speed = me.energy >= boostCost ? me.s.speed : me.s.walkSpeed;
       if (active(me, 'rush')) speed = me.s.speed * 1.8;
       if (active(me, 'flank')) speed = me.s.speed * 1.6;
+      if (active(me, 'redshift')) speed = me.s.speed * 2;
       const turtleLock = active(me, 'turtle');
       const sniperSet = me.s.behavior === 'sniper' && Math.abs(dist - want) < band * 2;
 
@@ -394,6 +415,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         const radial = clamp((dist - want) / 140, -1, 1);
         let orbit = ORBIT[me.s.behavior];
         if (active(me, 'flank')) orbit = 1.2;
+        if (active(me, 'redshift')) orbit = 1;
         if (sniperSet) orbit = 0;
         // don't orbit into a wall: look ahead and switch direction
         let tx = -uy * me.strafeSign;
@@ -471,8 +493,18 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       }
       me.vx += dvx;
       me.vy += dvy;
-      const nx = me.x + me.vx * DT;
-      const ny = me.y + me.vy * DT;
+      // grav anchor: the enemy's magnet drags this mech in
+      let px = 0;
+      let py = 0;
+      // polarity flips to suit its owner: pull when they want closer, repel when they want space
+      const gap = dist - foe.want;
+      if (foe.s.pull > 0 && dist > 110 && dist < 620 && Math.abs(gap) > 40 && !active(me, 'redshift')) {
+        const drag = (foe.s.pull / (1 + me.s.weight / 120)) * (gap > 0 ? 1 : -0.8);
+        px = -ux * drag * DT;
+        py = -uy * drag * DT;
+      }
+      const nx = me.x + me.vx * DT - px;
+      const ny = me.y + me.vy * DT - py;
       me.x = clamp(nx, 20, W - 20);
       me.y = clamp(ny, 20, H - 20);
       if (me.x !== nx) me.vx = 0;
@@ -500,7 +532,11 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       m.heat = Math.max(0, m.heat - m.s.cooling * DT);
       if (m.heat >= 100) m.overheated = true;
       else if (m.overheated && m.heat < 40) m.overheated = false;
-      if (m.s.behavior === 'berserk' && m.heat > 100) m.hp -= m.s.hp * 0.004;
+      if (m.s.behavior === 'berserk' && m.heat > 100) {
+        // meltdown: running redline slowly cooks the pilot, but hits harder
+        m.heat = Math.min(m.heat, 170);
+        m.hp -= m.s.hp * 0.0032;
+      }
     }
 
     // ── firing (resolved simultaneously) ──
@@ -516,7 +552,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         0
       );
       me.s.weapons.forEach((wp, w) => {
-        me.cooldown[w] = me.cooldown[w]! - (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1);
+        me.cooldown[w] =
+          me.cooldown[w]! - (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1) - (active(me, 'redshift') ? 1 : 0);
         const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
         if (big && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
         if (me.cooldown[w]! > 0) return;
@@ -552,6 +589,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           acc *= 0.7;
         }
         if (active(foe, 'flank')) ev += 0.5;
+        if (active(foe, 'redshift')) ev += 0.45;
+        if (active(me, 'redshift')) acc *= 1.15;
         if (foe.qbUntil > tick) ev += 0.3;
         if (wp.homing) ev *= 0.6;
         let p = clamp(acc * (1 - ev), 0.05, 0.97);
@@ -568,6 +607,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (crit) dmg *= 2.5;
           if (wp.charge) dmg *= 1 + Math.max(0, Math.min(1.2, closingSpeed / Math.max(60, me.s.speed)));
           if (active(me, 'berserk')) dmg *= 1.15;
+          if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.25, (me.heat - 100) / 200);
           if (active(foe, 'turtle')) dmg *= 0.6;
           dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;

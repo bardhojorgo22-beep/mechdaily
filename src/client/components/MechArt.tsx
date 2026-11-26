@@ -284,6 +284,14 @@ const BACKS: Record<string, (c: Ctx) => ReactNode> = {
       ))}
     </g>
   ),
+  'bk-magnet': (c) => (
+    <g {...s}>
+      <line x1={100} y1={84} x2={100} y2={58} />
+      <path d="M78 34 A22 22 0 0 0 122 34 L110 34 A10 10 0 0 1 90 34 Z" fill={c.dark} />
+      <rect x={76} y={26} width={14} height={10} fill="#e4572e" />
+      <rect x={110} y={26} width={14} height={10} fill="#3cf0ec" />
+    </g>
+  ),
   'bk-fins': (c) => (
     <g {...s}>
       <path d="M64 84 L52 58 L72 78 Z" fill={c.dark} />

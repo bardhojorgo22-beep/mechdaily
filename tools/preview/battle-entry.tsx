@@ -18,7 +18,7 @@ const a: Build = {
     legs: 'l-tread',
     core: 'c-ox',
     generator: 'g-furnace',
-    chip: 'p-turtle',
+    chip: q.get('ac') ?? 'p-turtle',
   },
   paint: { body: 1, trim: 5, decal: 2 },
 };
@@ -31,7 +31,7 @@ const b: Build = {
     weaponL: q.get('bl') ?? 'lw-saber',
     back: q.get('bb') ?? 'bk-swarm',
     legs: 'l-hopper',
-    chip: 'p-rush',
+    chip: q.get('bc') ?? 'p-rush',
     booster: 'b-jet',
     generator: 'g-coil',
   },
@@ -39,6 +39,7 @@ const b: Build = {
 };
 const arena = getArena(q.get('arena') ?? 'yard');
 const result = simulateBattle({ build: a }, { build: b }, arena, q.get('seed') ?? 's1');
+Reflect.set(window, 'R', result);
 createRoot(document.getElementById('root')!).render(
   <div className="grid-paper min-h-screen p-3">
     <BattleView result={result} builds={[a, b]} labels={['test', 'test']} arena={arena} />

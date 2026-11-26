@@ -107,6 +107,7 @@ export type MechStats = {
   qbCost: number;
   cooling: number; // heat removed per second
   jam: number;
+  pull: number; // magnet drag on the enemy, m/s
   rangeBonus: number;
   legType: LegType;
   behavior: Behavior;
@@ -129,6 +130,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   let sensor = 0;
   let cooling = 0;
   let jam = 0;
+  let pull = 0;
   let rangeBonus = 0;
   let thrust = 0;
   let boostDrain = 0;
@@ -215,6 +217,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
           accuracy *= 1 + (u.accuracy ?? 0) * eff;
           cooling += (u.cooling ?? 0) * eff;
           jam += (u.jam ?? 0) * eff;
+          pull += (u.pull ?? 0) * eff;
           rangeBonus += (u.range ?? 0) * eff;
         }
     }
@@ -249,6 +252,7 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
     qbCost: qbCost * arena.boostDrain,
     cooling: cooling * arena.cooling,
     jam,
+    pull,
     rangeBonus,
     legType,
     behavior,

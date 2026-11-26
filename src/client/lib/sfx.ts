@@ -228,6 +228,15 @@ export const sfx = {
     tone(440, 1760, 0.25, 'sawtooth', 0.06, 0.05);
     noise(0.2, 0.12, 4000, 0.02);
   },
+  redshift: () => {
+    tone(1600, 120, 0.9, 'sawtooth', 0.08);
+    tone(800, 60, 0.9, 'square', 0.05, 0.05);
+    noise(0.6, 0.2, 3000);
+  },
+  crash: () => {
+    tone(300, 40, 0.5, 'square', 0.14);
+    noise(0.8, 0.3, 900, 0.05);
+  },
   crit: () => {
     noise(0.4, 0.45, 5000);
     tone(1800, 200, 0.35, 'sawtooth', 0.15);

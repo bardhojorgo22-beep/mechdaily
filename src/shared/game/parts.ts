@@ -44,7 +44,7 @@ export const SLOT_SHORT: Record<Slot, string> = {
 
 export type DamageType = 'kinetic' | 'energy' | 'explosive' | 'melee';
 export type LegType = 'biped' | 'reverse' | 'quad' | 'tank' | 'hover';
-export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank';
+export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank' | 'redshift';
 
 export type Weapon = {
   type: DamageType;
@@ -133,6 +133,7 @@ export type UtilityPart = PartBase & {
     cooling?: number;
     jam?: number;
     range?: number;
+    pull?: number; // magnet: drags the enemy toward you, metres per second
   };
 };
 export type ChipPart = PartBase & { slot: 'chip'; behavior: Behavior };
@@ -839,6 +840,15 @@ export const PARTS: Part[] = [
     utility: { jam: 0.22 },
   },
   {
+    id: 'bk-magnet',
+    slot: 'back',
+    name: 'Grav Anchor',
+    blurb: "Magnet. Pulls enemies in if you want them close, pushes them off if you don't.",
+    weight: 11,
+    drain: 6,
+    utility: { pull: 130, hp: 200 },
+  },
+  {
     id: 'bk-fins',
     slot: 'back',
     name: 'Fins',
@@ -900,6 +910,15 @@ export const PARTS: Part[] = [
     name: 'Flank',
     behavior: 'flank',
     blurb: 'Circles the enemy, hard to pin.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-redshift',
+    slot: 'chip',
+    name: 'Redshift',
+    behavior: 'redshift',
+    blurb: 'Overclocks the pilot. Burns hot after.',
     weight: 0,
     drain: 0,
   },

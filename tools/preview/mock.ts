@@ -83,8 +83,26 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
     return json({
       type: 'challenges',
       list: [
-        { seed: 'c1', arenaId: 'mud', aPilot: 'DunhillGri', bPilot: 'other', aBuild: { ...DEFAULT_BUILD, name: 'Kettle Prime' }, bBuild: champs[0], winner: 0, at: 1 },
-        { seed: 'c2', arenaId: 'mud', aPilot: 'someone', bPilot: 'DunhillGri', aBuild: champs[1], bBuild: { ...DEFAULT_BUILD, name: 'Kettle Prime' }, winner: 0, at: 2 },
+        {
+          seed: 'c1',
+          arenaId: 'mud',
+          aPilot: 'DunhillGri',
+          bPilot: 'other',
+          aBuild: { ...DEFAULT_BUILD, name: 'Kettle Prime' },
+          bBuild: champs[0],
+          winner: 0,
+          at: 1,
+        },
+        {
+          seed: 'c2',
+          arenaId: 'mud',
+          aPilot: 'someone',
+          bPilot: 'DunhillGri',
+          aBuild: champs[1],
+          bBuild: { ...DEFAULT_BUILD, name: 'Kettle Prime' },
+          winner: 0,
+          at: 2,
+        },
       ],
     });
   if (url.startsWith('/api/raid'))
