@@ -4,7 +4,7 @@ import { clamp, createRng } from './rng';
 
 export const TICKS_PER_SECOND = 10;
 export const MAX_TICKS = 90 * TICKS_PER_SECOND;
-export const FRAME_EVERY = 2;
+export const FRAME_EVERY = 1;
 const DT = 1 / TICKS_PER_SECOND;
 /** Global damage knob: tunes how long fights last. */
 const DAMAGE_SCALE = 1.7;
@@ -48,6 +48,9 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
   },
 };
 
+/** Movement bursts, for visuals: quick boost (sideways dash) or overboost (long charge). */
+export type MoveEvent = { t: number; by: 0 | 1; kind: 'qb' | 'ob'; dx: number; dy: number };
+
 export type SpecialEvent = {
   t: number;
   by: 0 | 1;
@@ -66,6 +69,7 @@ export type BattleResult = {
   damage: [number, number];
   hazardHits: number[]; // ticks where scrap fell
   specials: SpecialEvent[];
+  moves: MoveEvent[];
 };
 
 type MechState = {
@@ -89,6 +93,10 @@ type MechState = {
   charged: boolean; // sniper: next long-range shot is charged
   dmgMult: number;
   moveFrac: number; // current speed / top speed, drives evasion
+  qbCd: number; // ticks until next quick boost
+  qbUntil: number; // dodge window from a quick boost
+  ob: boolean; // overboosting
+  threat: number; // tick when a big enemy shot was telegraphed
 };
 
 const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechState => ({
@@ -113,6 +121,10 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   charged: false,
   dmgMult: 1,
   moveFrac: 0,
+  qbCd: 10 + seedOffset * 5,
+  qbUntil: 0,
+  ob: false,
+  threat: -99,
 });
 
 const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
@@ -164,6 +176,16 @@ const armorAgainst = (target: MechStats, type: MountedWeapon['type']) => {
 };
 
 /** mods: used for raid bosses (hp and damage multipliers). */
+/** How much each pilot likes to circle the target (0 = stands, 1 = full orbit). */
+const ORBIT: Record<MechStats['behavior'], number> = {
+  rush: 0.45,
+  kite: 0.75,
+  turtle: 0.15,
+  sniper: 0.3,
+  berserk: 0.35,
+  flank: 0.95,
+};
+
 export type Fighter = {
   build: Build;
   tax?: Tax;
@@ -185,6 +207,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
   mechs[0].dmgMult = a.mods?.damage ?? 1;
   mechs[1].dmgMult = b.mods?.damage ?? 1;
   const specials: SpecialEvent[] = [];
+  const moves: MoveEvent[] = [];
   const active = (m: MechState, kind: MechStats['behavior']) => m.s.behavior === kind && m.specialUntil > tick;
   const frames: number[] = [];
   const events: ShotEvent[] = [];
@@ -262,65 +285,112 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           });
         }
       }
-      let radial = 0;
-      if (dist > want + band) radial = 1;
-      else if (dist < want - band) radial = -1;
+      // ── AC-style movement ──
+      // Circle-strafe around the target at the preferred range, quick boost
+      // sideways to dodge, overboost in a straight line to close big gaps.
+      const by: 0 | 1 = i === 0 ? 0 : 1;
+      const boostCost = me.s.boostDrain * DT;
+      let speed = me.energy >= boostCost ? me.s.speed : me.s.walkSpeed;
+      if (active(me, 'rush')) speed = me.s.speed * 1.8;
+      if (active(me, 'flank')) speed = me.s.speed * 1.6;
+      const turtleLock = active(me, 'turtle');
+      const sniperSet = me.s.behavior === 'sniper' && Math.abs(dist - want) < band * 2;
 
-      let strafe = 0.15;
-      if (active(me, 'flank')) strafe = 1.4;
-      else if (me.s.behavior === 'flank') strafe = 0.85;
-      else if (me.s.behavior === 'kite') strafe = 0.4;
-      else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk') strafe = 0.12;
-      if (me.s.behavior === 'flank' && tick % 70 === 0) me.strafeSign *= -1;
-
-      // Backed into a wall? Slide along it instead of getting pinned.
-      const nearWall = me.x < 90 || me.x > W - 90 || me.y < 70 || me.y > H - 70;
-      if (radial < 0 && nearWall) {
-        strafe = 1;
-        radial = -0.2;
-        const tx = -uy * me.strafeSign;
-        const ty = ux * me.strafeSign;
-        if (me.x + tx * 60 < 20 || me.x + tx * 60 > W - 20 || me.y + ty * 60 < 20 || me.y + ty * 60 > H - 20) {
-          me.strafeSign *= -1;
-        }
+      // overboost: long, fast, straight charge when way out of range
+      const holdsGround = me.s.behavior === 'turtle' || me.s.behavior === 'sniper';
+      if (!me.ob && !holdsGround && dist > want * 1.6 + 150 && me.energy > me.s.energyCap * 0.5) {
+        me.ob = true;
+        moves.push({ t: tick, by, kind: 'ob', dx: ux, dy: uy });
       }
+      if (me.ob && (dist < want * 1.15 + 40 || me.energy < me.s.energyCap * 0.12)) me.ob = false;
 
-      let mx = ux * radial + -uy * strafe * me.strafeSign;
-      let my = uy * radial + ux * strafe * me.strafeSign;
-      const mag = Math.sqrt(mx * mx + my * my);
-
-      const sniperSet = me.s.behavior === 'sniper' && radial >= 0 && dist <= want + band;
-      const turtleSet = (me.s.behavior === 'turtle' && radial <= 0) || active(me, 'turtle');
-      // Heavy movement: mechs accelerate toward where they want to go and
-      // skid to a stop. Heavier mechs take longer to get going and to turn.
       let tvx = 0;
       let tvy = 0;
-      let topSpeed = me.s.speed;
-      if (me.planted > 0 || sniperSet || turtleSet || mag < 0.001) {
-        if (me.planted > 0) me.planted--;
+      if (me.planted > 0) {
+        me.planted--;
+      } else if (turtleLock) {
+        // dug in
+      } else if (me.ob) {
+        tvx = ux * speed * 2.1;
+        tvy = uy * speed * 2.1;
+        me.energy -= me.s.boostDrain * 1.8 * DT;
       } else {
-        mx /= mag;
-        my /= mag;
-        const boostCost = me.s.boostDrain * DT;
-        let speed = me.s.walkSpeed;
-        if (me.energy >= boostCost) {
-          speed = me.s.speed;
-          me.energy -= boostCost;
+        const radial = clamp((dist - want) / 140, -1, 1);
+        let orbit = ORBIT[me.s.behavior];
+        if (active(me, 'flank')) orbit = 1.2;
+        if (sniperSet) orbit = 0;
+        // don't orbit into a wall: look ahead and switch direction
+        let tx = -uy * me.strafeSign;
+        let ty = ux * me.strafeSign;
+        const ax = me.x + tx * 90;
+        const ay = me.y + ty * 90;
+        if (ax < 30 || ax > W - 30 || ay < 30 || ay > H - 30) {
+          me.strafeSign *= -1;
+          tx = -tx;
+          ty = -ty;
         }
-        if (active(me, 'rush')) speed = me.s.speed * 1.8;
-        if (active(me, 'flank')) speed = me.s.speed * 1.6;
-        topSpeed = Math.max(topSpeed, speed);
+        const nearWall = me.x < 90 || me.x > W - 90 || me.y < 70 || me.y > H - 70;
+        if (radial < 0 && nearWall) orbit = Math.max(orbit, 0.95);
+        let mx = ux * radial + tx * orbit;
+        let my = uy * radial + ty * orbit;
+        const mag = Math.sqrt(mx * mx + my * my);
+        if (mag > 1) {
+          mx /= mag;
+          my /= mag;
+        }
+        if (sniperSet && Math.abs(dist - want) < band) {
+          mx = 0;
+          my = 0;
+        }
         tvx = mx * speed;
         tvy = my * speed;
+        if (mag > 0.4 && me.energy >= boostCost) me.energy -= boostCost;
       }
-      const timeToTop = 0.15 + me.s.weight / 150; // seconds
-      const accel = (Math.max(topSpeed, 60) / timeToTop) * DT;
+
+      // quick boost: a sudden sideways burst. Fired to dodge a telegraphed
+      // big shot, or on a rhythm while circling.
+      me.qbCd--;
+      const rhythm = Math.round(14 + me.s.weight / 8);
+      const dodging = me.threat >= tick - 1;
+      const rhythmic = ORBIT[me.s.behavior] >= 0.3 && (tick + i * 9) % rhythm === 0;
+      if (
+        me.qbCd <= 0 &&
+        !turtleLock &&
+        me.planted <= 0 &&
+        !me.ob &&
+        !sniperSet &&
+        me.energy >= me.s.qbCost &&
+        (dodging || rhythmic)
+      ) {
+        if (dodging && rng.chance(0.4)) me.strafeSign *= -1;
+        let qx = -uy * me.strafeSign;
+        let qy = ux * me.strafeSign;
+        if ((me.s.behavior === 'rush' || me.s.behavior === 'berserk') && dist > want + band) {
+          // aggressive pilots dash in at an angle
+          qx = (qx + ux) * 0.7071;
+          qy = (qy + uy) * 0.7071;
+        }
+        me.vx += qx * me.s.qbSpeed;
+        me.vy += qy * me.s.qbSpeed;
+        me.energy -= me.s.qbCost;
+        me.qbCd = me.s.qbCooldown;
+        me.qbUntil = tick + 3;
+        moves.push({ t: tick, by, kind: 'qb', dx: qx, dy: qy });
+      }
+
+      // mass: how quickly velocity bends toward the target velocity
+      const timeToTop = 0.15 + me.s.weight / 150;
+      const accel = (Math.max(me.s.speed, 60) / timeToTop) * DT;
       let dvx = tvx - me.vx;
       let dvy = tvy - me.vy;
       const dv = Math.sqrt(dvx * dvx + dvy * dvy);
-      if (dv > accel) {
-        dvx = (dvx / dv) * accel;
-        dvy = (dvy / dv) * accel;
+      // bursts (quick boost, knockback) bleed off a bit faster than normal steering
+      const cur = Math.sqrt(me.vx * me.vx + me.vy * me.vy);
+      const tgt = Math.sqrt(tvx * tvx + tvy * tvy);
+      const limit = cur > tgt + 40 ? accel * 1.4 : accel;
+      if (dv > limit) {
+        dvx = (dvx / dv) * limit;
+        dvy = (dvy / dv) * limit;
       }
       me.vx += dvx;
       me.vy += dvy;
@@ -328,7 +398,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const ny = me.y + me.vy * DT;
       me.x = clamp(nx, 20, W - 20);
       me.y = clamp(ny, 20, H - 20);
-      if (me.x !== nx) me.vx = 0; // hit a wall
+      if (me.x !== nx) me.vx = 0;
       if (me.y !== ny) me.vy = 0;
       const sp = Math.sqrt(me.vx * me.vx + me.vy * me.vy);
       me.moving = sp > 8;
@@ -358,6 +428,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       );
       me.s.weapons.forEach((wp, w) => {
         me.cooldown[w] = me.cooldown[w]! - (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1);
+        const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
+        if (big && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
         if (me.cooldown[w]! > 0) return;
         const ammo = me.ammo[w];
         if (ammo !== null && ammo !== undefined && ammo <= 0) return;
@@ -385,6 +457,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           acc *= 0.7;
         }
         if (active(foe, 'flank')) ev += 0.5;
+        if (foe.qbUntil > tick) ev += 0.3;
         if (wp.homing) ev *= 0.6;
         let p = clamp(acc * (1 - ev), 0.05, 0.97);
         if (crit) p = Math.min(0.97, p + 0.35);
@@ -469,5 +542,6 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     damage: [Math.round(m0.dealt), Math.round(m1.dealt)],
     hazardHits,
     specials,
+    moves,
   };
 };

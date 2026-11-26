@@ -2,7 +2,7 @@
 // internal resolution and scaled up with nearest-neighbour by CSS.
 import type { Arena } from '../../shared/game/arenas';
 import { FRAME_EVERY, SPECIALS, type BattleResult, type ShotEvent } from '../../shared/game/battle';
-import type { Build } from '../../shared/game/mech';
+import { computeStats, type Build } from '../../shared/game/mech';
 import { getPart } from '../../shared/game/parts';
 import { createRng } from '../../shared/game/rng';
 import { sfx } from './sfx';
@@ -385,6 +385,9 @@ export const createRenderer = (
   const walked = [0, 0];
   const lastPos: { x: number; y: number }[] = [];
   let nextSpecial = 0;
+  let nextMove = 0;
+  const qbUntil = [0, 0];
+  const topSpeed = builds.map((b) => Math.max(40, computeStats(b, arena).speed));
   const trail: { x: number; y: number }[][] = [[], []];
   let lastT = 0;
   const legTypes = builds.map((b) => {
@@ -442,6 +445,82 @@ export const createRenderer = (
       return 4 * ph * (1 - ph) * 9;
     };
     const quiet = getSpeed() > 2;
+
+    // ── boosting: quick boosts, overboost, exhaust ──
+    while (nextMove < result.moves.length && result.moves[nextMove]!.t <= t) {
+      const mv = result.moves[nextMove++]!;
+      if (t - mv.t > 20) continue;
+      const p = pos[mv.by]!;
+      if (mv.kind === 'qb') {
+        qbUntil[mv.by] = t + 3.5;
+        if (!quiet) sfx.qb(mv.by);
+        // flame blast out the back of the dash, plus a dust ring
+        spawn(
+          p.x - mv.dx * 8,
+          p.y - mv.dy * 8 + 2,
+          10,
+          ['#ffffff', '#bffcfb', '#ffd23f', '#ff7a2f', '#8a8478'],
+          70,
+          0.35,
+          2,
+          -mv.dx,
+          -mv.dy,
+          0.35,
+          1
+        );
+        spawn(p.x, p.y + sh[mv.by]! * 0.42, 6, [theme.speck, theme.dark], 26, 0.45, 2, 0, 0, 1, 1);
+      } else {
+        if (!quiet) sfx.ob();
+        flash = Math.max(flash, 0.05);
+        spawn(
+          p.x - mv.dx * 10,
+          p.y - mv.dy * 10,
+          22,
+          ['#ffffff', '#bffcfb', '#3cf0ec', '#ffd23f', '#ff7a2f'],
+          90,
+          0.5,
+          2,
+          -mv.dx,
+          -mv.dy,
+          0.4,
+          1.5
+        );
+        shake = Math.max(shake, 2);
+      }
+    }
+    {
+      const prev = frameAt(result, Math.max(0, t - 1));
+      for (let i = 0; i < 2; i++) {
+        const vx = fr[i]!.x - prev[i]!.x; // metres per tick
+        const vy = fr[i]!.y - prev[i]!.y;
+        const v = Math.sqrt(vx * vx + vy * vy) * 10; // m/s
+        if (v < 15 || t >= result.ticks) continue;
+        const ratio = v / topSpeed[i]!;
+        const p = pos[i]!;
+        const ux = vx / (v / 10);
+        const uy = vy / (v / 10);
+        const bx = p.x - ux * (sw[i]! * 0.32);
+        const by = p.y - uy * 4 - sh[i]! * 0.1;
+        const hot = ratio > 1.4; // overboost or quick-boost glide
+        const n = hot ? 3 : ratio > 0.5 && rng.chance(0.6) ? 1 : 0;
+        if (n)
+          spawn(
+            bx,
+            by,
+            n,
+            hot
+              ? ['#ffffff', '#bffcfb', '#3cf0ec', '#ffd23f', '#ff7a2f']
+              : ['#fff3b0', '#ffd23f', '#ff7a2f', '#8a8478'],
+            hot ? 55 : 28,
+            hot ? 0.35 : 0.22,
+            hot ? 2 : 1,
+            -ux,
+            -uy,
+            0.25,
+            0.5
+          );
+      }
+    }
 
     // ── chip specials ──
     while (nextSpecial < result.specials.length && result.specials[nextSpecial]!.t <= t) {
@@ -725,7 +804,7 @@ export const createRenderer = (
       const sp = sprites.current[i];
       const act = specialActive(i);
       // afterimages while dashing
-      if (act && (act.kind === 'rush' || act.kind === 'flank')) {
+      if ((act && (act.kind === 'rush' || act.kind === 'flank')) || t < qbUntil[i]!) {
         const tr = trail[i]!;
         tr.unshift({ x, y: y + bobY });
         if (tr.length > 6) tr.pop();

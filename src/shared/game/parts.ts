@@ -102,6 +102,10 @@ export type BoosterPart = PartBase & {
   slot: 'booster';
   thrust: number;
   boostDrain: number;
+  /** quick boost: sideways dash burst */
+  qbPower: number;
+  qbCooldown: number; // ticks
+  qbCost: number; // energy
 };
 export type GeneratorPart = PartBase & {
   slot: 'generator';
@@ -210,9 +214,9 @@ export const PARTS: Part[] = [
     slot: 'core',
     name: 'Shell',
     blurb: 'Light frame, runs cool.',
-    weight: 14,
+    weight: 12,
     drain: 4,
-    hp: 1300,
+    hp: 1560,
     armorK: 0.15,
     armorE: 0.15,
     cooling: 22,
@@ -404,6 +408,9 @@ export const PARTS: Part[] = [
     drain: 1,
     thrust: 205,
     boostDrain: 4,
+    qbPower: 170,
+    qbCooldown: 24,
+    qbCost: 18,
   },
   {
     id: 'b-jet',
@@ -414,6 +421,9 @@ export const PARTS: Part[] = [
     drain: 2,
     thrust: 290,
     boostDrain: 12,
+    qbPower: 240,
+    qbCooldown: 18,
+    qbCost: 28,
   },
   {
     id: 'b-rocket',
@@ -424,16 +434,22 @@ export const PARTS: Part[] = [
     drain: 3,
     thrust: 380,
     boostDrain: 22,
+    qbPower: 310,
+    qbCooldown: 22,
+    qbCost: 42,
   },
   {
     id: 'b-drift',
     slot: 'booster',
     name: 'Drift',
-    blurb: 'Sideways bursts, hard to hit.',
+    blurb: 'Quick-boosts twice as often. Slippery.',
     weight: 4,
     drain: 2,
     thrust: 230,
     boostDrain: 9,
+    qbPower: 230,
+    qbCooldown: 11,
+    qbCost: 20,
   },
 
   // ── Generators ───────────────────────────────────────
@@ -549,13 +565,13 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'energy',
-      damage: 330,
+      damage: 370,
       minRange: 150,
       maxRange: 950,
       cooldown: 38,
       heat: 26,
       energyCost: 70,
-      accuracy: 0.66,
+      accuracy: 0.72,
       ammo: null,
       heavy: true,
     }),
@@ -705,10 +721,10 @@ export const PARTS: Part[] = [
     drain: 1,
     weapon: w({
       type: 'explosive',
-      damage: 110,
+      damage: 92,
       minRange: 120,
       maxRange: 750,
-      cooldown: 30,
+      cooldown: 34,
       heat: 10,
       energyCost: 0,
       accuracy: 0.85,

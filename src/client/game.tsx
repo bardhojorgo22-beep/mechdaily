@@ -10,7 +10,7 @@ import { simulateBattle, type BattleResult } from '../shared/game/battle';
 import { botsForDay } from '../shared/game/bots';
 import { bossForDay, simulateRaid } from '../shared/game/boss';
 import { FACTIONS, FACTION_IDS, type FactionId } from '../shared/game/factions';
-import { DEFAULT_BUILD, type Build, type Tax } from '../shared/game/mech';
+import { DEFAULT_BUILD, validateBuild, type Build, type Tax } from '../shared/game/mech';
 import { getPart } from '../shared/game/parts';
 import { winsFor } from '../shared/game/tournament';
 import { BattleView } from './components/BattleView';
@@ -31,6 +31,24 @@ type Fight = {
   back: Screen;
 };
 type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions' | 'challenge';
+
+// Local backup of the last build, in case the server copy is missing.
+const BACKUP_KEY = 'mechdaily-build';
+const loadBackup = (): Build | null => {
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY);
+    return raw ? validateBuild(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+};
+const saveBackup = (b: Build) => {
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(b));
+  } catch {
+    /* storage unavailable */
+  }
+};
 
 const postUrl = (postId: string) =>
   `https://www.reddit.com/r/${context.subredditName}/comments/${postId.replace(/^t3_/, '')}`;
@@ -231,13 +249,16 @@ export const App = () => {
   const [rival, setRival] = useState('');
   const [, setNow] = useState(0);
   const fightCount = useRef(0);
+  const loaded = useRef(false);
+  const lastSaved = useRef('');
 
   const load = useCallback(() => {
     api
       .init()
       .then((d) => {
         setData(d);
-        setBuild(d.myEntry ?? d.myBuild ?? DEFAULT_BUILD);
+        setBuild(d.myBuild ?? d.myEntry ?? loadBackup() ?? DEFAULT_BUILD);
+        loaded.current = true;
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not load'));
   }, []);
@@ -264,13 +285,28 @@ export const App = () => {
 
   const entered = data?.myEntry ? JSON.stringify(data.myEntry) === JSON.stringify(build) : false;
 
-  const leaveGarage = async () => {
+  // Autosave: every change to the mech is saved (debounced) to the server
+  // and backed up locally, so it survives refreshes and app updates.
+  useEffect(() => {
+    if (!loaded.current) return;
+    const json = JSON.stringify(build);
+    if (json === lastSaved.current) return;
+    saveBackup(build);
+    const id = setTimeout(() => {
+      api
+        .save(build)
+        .then(() => {
+          lastSaved.current = json;
+        })
+        .catch(() => undefined);
+    }, 700);
+    return () => clearTimeout(id);
+  }, [build]);
+
+  const leaveGarage = () => {
     setScreen('home');
-    try {
-      await api.save(build);
-    } catch {
-      /* not logged in: keep it local */
-    }
+    saveBackup(build);
+    api.save(build).catch(() => undefined);
   };
 
   const enter = async () => {
@@ -601,7 +637,7 @@ export const App = () => {
         )}
 
         {screen === 'garage' && (
-          <Garage build={build} arena={arena} tax={tax} onChange={setBuild} onBack={() => void leaveGarage()} />
+          <Garage build={build} arena={arena} tax={tax} onChange={setBuild} onBack={leaveGarage} />
         )}
 
         {screen === 'practice' && (

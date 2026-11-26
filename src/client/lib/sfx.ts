@@ -186,6 +186,15 @@ export const sfx = {
   },
   win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.14, 'square', 0.14, i * 0.11)),
   lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, f * 0.98, 0.18, 'triangle', 0.16, i * 0.14)),
+  qb: (side: 0 | 1) => {
+    if (!throttle(`qb-${side}`, 90)) return;
+    noise(0.18, 0.32, side === 0 ? 2600 : 2100);
+    tone(side === 0 ? 140 : 120, 60, 0.12, 'square', 0.08);
+  },
+  ob: () => {
+    noise(0.7, 0.3, 1800);
+    tone(90, 260, 0.5, 'sawtooth', 0.09);
+  },
   special: () => {
     tone(220, 880, 0.25, 'square', 0.14);
     tone(440, 1760, 0.25, 'sawtooth', 0.06, 0.05);

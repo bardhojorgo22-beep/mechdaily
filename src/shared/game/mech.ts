@@ -102,6 +102,9 @@ export type MechStats = {
   energyCap: number;
   energyRegen: number; // net per second, after passive drains
   boostDrain: number;
+  qbSpeed: number;
+  qbCooldown: number;
+  qbCost: number;
   cooling: number; // heat removed per second
   jam: number;
   rangeBonus: number;
@@ -129,6 +132,9 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   let rangeBonus = 0;
   let thrust = 0;
   let boostDrain = 0;
+  let qbPower = 0;
+  let qbCooldown = 30;
+  let qbCost = 40;
   let output = 0;
   let capacity = 0;
   let mobility = 1;
@@ -175,6 +181,9 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
       case 'booster':
         thrust = part.thrust * eff;
         boostDrain = part.boostDrain;
+        qbPower = part.qbPower * eff;
+        qbCooldown = part.qbCooldown;
+        qbCost = part.qbCost;
         break;
       case 'generator':
         output = part.output * eff;
@@ -235,6 +244,9 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
     energyCap: capacity,
     energyRegen: output * arena.genOutput - drain,
     boostDrain: boostDrain * arena.boostDrain,
+    qbSpeed: (qbPower * mobility * weightFactor * legSpeed * arena.speed) / (1 + weight / 140),
+    qbCooldown,
+    qbCost: qbCost * arena.boostDrain,
     cooling: cooling * arena.cooling,
     jam,
     rangeBonus,
