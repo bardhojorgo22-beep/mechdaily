@@ -34,7 +34,7 @@ export const createRng = (seed: number | string): Rng => {
     next,
     int,
     chance: (p) => next() < p,
-    pick: <T,>(items: readonly T[]): T => {
+    pick: <T>(items: readonly T[]): T => {
       const item = items[int(items.length)];
       if (item === undefined) throw new Error('pick from empty list');
       return item;

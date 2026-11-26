@@ -31,7 +31,8 @@ export const SLOT_LABEL: Record<Slot, string> = {
 
 export type DamageType = 'kinetic' | 'energy' | 'explosive' | 'melee';
 export type LegType = 'biped' | 'reverse' | 'quad' | 'tank' | 'hover';
-export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank';
+export type Behavior =
+  'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank';
 
 export type Weapon = {
   type: DamageType;
@@ -55,7 +56,12 @@ type PartBase = {
   drain: number; // passive energy use per second
 };
 
-export type HeadPart = PartBase & { slot: 'head'; hp: number; accuracy: number; sensor: number };
+export type HeadPart = PartBase & {
+  slot: 'head';
+  hp: number;
+  accuracy: number;
+  sensor: number;
+};
 export type CorePart = PartBase & {
   slot: 'core';
   hp: number;
@@ -64,7 +70,12 @@ export type CorePart = PartBase & {
   cooling: number;
   load: number;
 };
-export type ArmsPart = PartBase & { slot: 'arms'; hp: number; accuracy: number; armorK: number };
+export type ArmsPart = PartBase & {
+  slot: 'arms';
+  hp: number;
+  accuracy: number;
+  armorK: number;
+};
 export type LegsPart = PartBase & {
   slot: 'legs';
   legType: LegType;
@@ -75,13 +86,37 @@ export type LegsPart = PartBase & {
   mobility: number;
   evasion: number;
 };
-export type BoosterPart = PartBase & { slot: 'booster'; thrust: number; boostDrain: number };
-export type GeneratorPart = PartBase & { slot: 'generator'; output: number; capacity: number; cooling: number };
-export type WeaponPart = PartBase & { slot: 'weaponR' | 'weaponL' | 'back'; weapon: Weapon };
-export type ShieldPart = PartBase & { slot: 'weaponL'; shield: { block: number; energyPerHit: number } };
+export type BoosterPart = PartBase & {
+  slot: 'booster';
+  thrust: number;
+  boostDrain: number;
+};
+export type GeneratorPart = PartBase & {
+  slot: 'generator';
+  output: number;
+  capacity: number;
+  cooling: number;
+};
+export type WeaponPart = PartBase & {
+  slot: 'weaponR' | 'weaponL' | 'back';
+  weapon: Weapon;
+};
+export type ShieldPart = PartBase & {
+  slot: 'weaponL';
+  shield: { block: number; energyPerHit: number };
+};
 export type UtilityPart = PartBase & {
   slot: 'back';
-  utility: { hp?: number; armorK?: number; armorE?: number; sensor?: number; accuracy?: number; cooling?: number; jam?: number; range?: number };
+  utility: {
+    hp?: number;
+    armorK?: number;
+    armorE?: number;
+    sensor?: number;
+    accuracy?: number;
+    cooling?: number;
+    jam?: number;
+    range?: number;
+  };
 };
 export type ChipPart = PartBase & { slot: 'chip'; behavior: Behavior };
 
@@ -101,81 +136,713 @@ const w = (weapon: Weapon) => weapon;
 
 export const PARTS: Part[] = [
   // ── Heads ────────────────────────────────────────────
-  { id: 'h-lantern', slot: 'head', name: 'Lantern', blurb: 'Cheap, light, sees fine.', weight: 2, drain: 1, hp: 150, accuracy: 1.0, sensor: 500 },
-  { id: 'h-owl', slot: 'head', name: 'Owl Eye', blurb: 'Long sensors. Laughs at fog.', weight: 3, drain: 4, hp: 120, accuracy: 1.02, sensor: 1100 },
-  { id: 'h-bucket', slot: 'head', name: 'Bucket', blurb: 'Thick skull, blurry view.', weight: 5, drain: 1, hp: 380, accuracy: 0.93, sensor: 400 },
-  { id: 'h-needle', slot: 'head', name: 'Needle', blurb: 'Targeting computer stuffed in a tin.', weight: 3, drain: 6, hp: 110, accuracy: 1.12, sensor: 650 },
-  { id: 'h-crown', slot: 'head', name: 'Crown', blurb: 'Balanced all-rounder.', weight: 4, drain: 3, hp: 240, accuracy: 1.05, sensor: 750 },
+  {
+    id: 'h-lantern',
+    slot: 'head',
+    name: 'Lantern',
+    blurb: 'Cheap, light, sees fine.',
+    weight: 2,
+    drain: 1,
+    hp: 150,
+    accuracy: 1.0,
+    sensor: 500,
+  },
+  {
+    id: 'h-owl',
+    slot: 'head',
+    name: 'Owl Eye',
+    blurb: 'Long sensors. Laughs at fog.',
+    weight: 3,
+    drain: 4,
+    hp: 120,
+    accuracy: 1.02,
+    sensor: 1100,
+  },
+  {
+    id: 'h-bucket',
+    slot: 'head',
+    name: 'Bucket',
+    blurb: 'Thick skull, blurry view.',
+    weight: 5,
+    drain: 1,
+    hp: 380,
+    accuracy: 0.93,
+    sensor: 400,
+  },
+  {
+    id: 'h-needle',
+    slot: 'head',
+    name: 'Needle',
+    blurb: 'Targeting computer stuffed in a tin.',
+    weight: 3,
+    drain: 6,
+    hp: 110,
+    accuracy: 1.12,
+    sensor: 650,
+  },
+  {
+    id: 'h-crown',
+    slot: 'head',
+    name: 'Crown',
+    blurb: 'Balanced all-rounder.',
+    weight: 4,
+    drain: 3,
+    hp: 240,
+    accuracy: 1.05,
+    sensor: 750,
+  },
 
   // ── Cores ────────────────────────────────────────────
-  { id: 'c-shell', slot: 'core', name: 'Shell', blurb: 'Light frame, runs cool.', weight: 14, drain: 4, hp: 1300, armorK: 0.15, armorE: 0.15, cooling: 22, load: 20 },
-  { id: 'c-vault', slot: 'core', name: 'Vault', blurb: 'A bank safe with opinions.', weight: 30, drain: 6, hp: 2200, armorK: 0.35, armorE: 0.12, cooling: 10, load: 15 },
-  { id: 'c-prism', slot: 'core', name: 'Prism', blurb: 'Coated to scatter lasers.', weight: 20, drain: 7, hp: 1600, armorK: 0.12, armorE: 0.38, cooling: 14, load: 18 },
-  { id: 'c-radiator', slot: 'core', name: 'Radiator', blurb: 'All fins, no fear of heat.', weight: 18, drain: 5, hp: 1500, armorK: 0.2, armorE: 0.2, cooling: 38, load: 16 },
-  { id: 'c-ox', slot: 'core', name: 'Ox', blurb: 'Carries anything. Feels everything.', weight: 24, drain: 5, hp: 1750, armorK: 0.22, armorE: 0.18, cooling: 16, load: 40 },
+  {
+    id: 'c-shell',
+    slot: 'core',
+    name: 'Shell',
+    blurb: 'Light frame, runs cool.',
+    weight: 14,
+    drain: 4,
+    hp: 1300,
+    armorK: 0.15,
+    armorE: 0.15,
+    cooling: 22,
+    load: 20,
+  },
+  {
+    id: 'c-vault',
+    slot: 'core',
+    name: 'Vault',
+    blurb: 'A bank safe with opinions.',
+    weight: 30,
+    drain: 6,
+    hp: 2200,
+    armorK: 0.35,
+    armorE: 0.12,
+    cooling: 10,
+    load: 15,
+  },
+  {
+    id: 'c-prism',
+    slot: 'core',
+    name: 'Prism',
+    blurb: 'Coated to scatter lasers.',
+    weight: 20,
+    drain: 7,
+    hp: 1600,
+    armorK: 0.12,
+    armorE: 0.38,
+    cooling: 14,
+    load: 18,
+  },
+  {
+    id: 'c-radiator',
+    slot: 'core',
+    name: 'Radiator',
+    blurb: 'All fins, no fear of heat.',
+    weight: 18,
+    drain: 5,
+    hp: 1500,
+    armorK: 0.2,
+    armorE: 0.2,
+    cooling: 38,
+    load: 16,
+  },
+  {
+    id: 'c-ox',
+    slot: 'core',
+    name: 'Ox',
+    blurb: 'Carries anything. Feels everything.',
+    weight: 24,
+    drain: 5,
+    hp: 1750,
+    armorK: 0.22,
+    armorE: 0.18,
+    cooling: 16,
+    load: 40,
+  },
 
   // ── Arms ─────────────────────────────────────────────
-  { id: 'a-wire', slot: 'arms', name: 'Wire', blurb: 'Twitchy and precise.', weight: 5, drain: 3, hp: 200, accuracy: 1.1, armorK: 0.02 },
-  { id: 'a-brace', slot: 'arms', name: 'Brace', blurb: 'Steady, armored forearms.', weight: 10, drain: 2, hp: 420, accuracy: 1.0, armorK: 0.08 },
-  { id: 'a-ram', slot: 'arms', name: 'Ram', blurb: 'Built for punching things.', weight: 14, drain: 2, hp: 560, accuracy: 0.92, armorK: 0.12 },
-  { id: 'a-gimbal', slot: 'arms', name: 'Gimbal', blurb: 'Stabilized. Loves energy guns.', weight: 7, drain: 6, hp: 260, accuracy: 1.16, armorK: 0.03 },
+  {
+    id: 'a-wire',
+    slot: 'arms',
+    name: 'Wire',
+    blurb: 'Twitchy and precise.',
+    weight: 5,
+    drain: 3,
+    hp: 200,
+    accuracy: 1.1,
+    armorK: 0.02,
+  },
+  {
+    id: 'a-brace',
+    slot: 'arms',
+    name: 'Brace',
+    blurb: 'Steady, armored forearms.',
+    weight: 10,
+    drain: 2,
+    hp: 420,
+    accuracy: 1.0,
+    armorK: 0.08,
+  },
+  {
+    id: 'a-ram',
+    slot: 'arms',
+    name: 'Ram',
+    blurb: 'Built for punching things.',
+    weight: 14,
+    drain: 2,
+    hp: 560,
+    accuracy: 0.92,
+    armorK: 0.12,
+  },
+  {
+    id: 'a-gimbal',
+    slot: 'arms',
+    name: 'Gimbal',
+    blurb: 'Stabilized. Loves energy guns.',
+    weight: 7,
+    drain: 6,
+    hp: 260,
+    accuracy: 1.16,
+    armorK: 0.03,
+  },
 
   // ── Legs ─────────────────────────────────────────────
-  { id: 'l-strider', slot: 'legs', name: 'Strider', legType: 'biped', blurb: 'Two legs. Does everything okay.', weight: 18, drain: 3, hp: 700, armorK: 0.08, armorE: 0.08, load: 70, mobility: 1.0, evasion: 1.0 },
-  { id: 'l-hopper', slot: 'legs', name: 'Hopper', legType: 'reverse', blurb: 'Backwards knees, big jumps.', weight: 14, drain: 3, hp: 520, armorK: 0.05, armorE: 0.05, load: 55, mobility: 1.15, evasion: 1.35 },
-  { id: 'l-crab', slot: 'legs', name: 'Crab', legType: 'quad', blurb: 'Four legs, very planted.', weight: 26, drain: 4, hp: 950, armorK: 0.12, armorE: 0.1, load: 90, mobility: 0.8, evasion: 0.8 },
-  { id: 'l-tread', slot: 'legs', name: 'Tread', legType: 'tank', blurb: 'Slow. Heavy guns fire on the move.', weight: 36, drain: 4, hp: 1400, armorK: 0.18, armorE: 0.14, load: 130, mobility: 0.6, evasion: 0.55 },
-  { id: 'l-skate', slot: 'legs', name: 'Skate', legType: 'hover', blurb: 'Floats. Ignores mud. Thin.', weight: 12, drain: 9, hp: 580, armorK: 0.04, armorE: 0.07, load: 52, mobility: 1.3, evasion: 1.3 },
+  {
+    id: 'l-strider',
+    slot: 'legs',
+    name: 'Strider',
+    legType: 'biped',
+    blurb: 'Two legs. Does everything okay.',
+    weight: 18,
+    drain: 3,
+    hp: 700,
+    armorK: 0.08,
+    armorE: 0.08,
+    load: 70,
+    mobility: 1.0,
+    evasion: 1.0,
+  },
+  {
+    id: 'l-hopper',
+    slot: 'legs',
+    name: 'Hopper',
+    legType: 'reverse',
+    blurb: 'Backwards knees, big jumps.',
+    weight: 14,
+    drain: 3,
+    hp: 520,
+    armorK: 0.05,
+    armorE: 0.05,
+    load: 55,
+    mobility: 1.15,
+    evasion: 1.35,
+  },
+  {
+    id: 'l-crab',
+    slot: 'legs',
+    name: 'Crab',
+    legType: 'quad',
+    blurb: 'Four legs, very planted.',
+    weight: 26,
+    drain: 4,
+    hp: 950,
+    armorK: 0.12,
+    armorE: 0.1,
+    load: 90,
+    mobility: 0.8,
+    evasion: 0.8,
+  },
+  {
+    id: 'l-tread',
+    slot: 'legs',
+    name: 'Tread',
+    legType: 'tank',
+    blurb: 'Slow. Heavy guns fire on the move.',
+    weight: 36,
+    drain: 4,
+    hp: 1400,
+    armorK: 0.18,
+    armorE: 0.14,
+    load: 130,
+    mobility: 0.6,
+    evasion: 0.55,
+  },
+  {
+    id: 'l-skate',
+    slot: 'legs',
+    name: 'Skate',
+    legType: 'hover',
+    blurb: 'Floats. Ignores mud. Thin.',
+    weight: 12,
+    drain: 9,
+    hp: 580,
+    armorK: 0.04,
+    armorE: 0.07,
+    load: 52,
+    mobility: 1.3,
+    evasion: 1.3,
+  },
 
   // ── Boosters ─────────────────────────────────────────
-  { id: 'b-puff', slot: 'booster', name: 'Puff', blurb: 'Gentle and thrifty.', weight: 3, drain: 1, thrust: 205, boostDrain: 4 },
-  { id: 'b-jet', slot: 'booster', name: 'Jet', blurb: 'Fast. Thirsty.', weight: 5, drain: 2, thrust: 290, boostDrain: 12 },
-  { id: 'b-rocket', slot: 'booster', name: 'Rocket', blurb: 'Pure speed, empties the tank.', weight: 7, drain: 3, thrust: 380, boostDrain: 22 },
-  { id: 'b-drift', slot: 'booster', name: 'Drift', blurb: 'Sideways bursts, hard to hit.', weight: 4, drain: 2, thrust: 230, boostDrain: 9 },
+  {
+    id: 'b-puff',
+    slot: 'booster',
+    name: 'Puff',
+    blurb: 'Gentle and thrifty.',
+    weight: 3,
+    drain: 1,
+    thrust: 205,
+    boostDrain: 4,
+  },
+  {
+    id: 'b-jet',
+    slot: 'booster',
+    name: 'Jet',
+    blurb: 'Fast. Thirsty.',
+    weight: 5,
+    drain: 2,
+    thrust: 290,
+    boostDrain: 12,
+  },
+  {
+    id: 'b-rocket',
+    slot: 'booster',
+    name: 'Rocket',
+    blurb: 'Pure speed, empties the tank.',
+    weight: 7,
+    drain: 3,
+    thrust: 380,
+    boostDrain: 22,
+  },
+  {
+    id: 'b-drift',
+    slot: 'booster',
+    name: 'Drift',
+    blurb: 'Sideways bursts, hard to hit.',
+    weight: 4,
+    drain: 2,
+    thrust: 230,
+    boostDrain: 9,
+  },
 
   // ── Generators ───────────────────────────────────────
-  { id: 'g-ember', slot: 'generator', name: 'Ember', blurb: 'Small, steady output.', weight: 5, drain: 0, output: 45, capacity: 320, cooling: 8 },
-  { id: 'g-furnace', slot: 'generator', name: 'Furnace', blurb: 'Huge output, runs hot.', weight: 12, drain: 0, output: 75, capacity: 400, cooling: -6 },
-  { id: 'g-battery', slot: 'generator', name: 'Battery', blurb: 'Deep tank, slow refill.', weight: 9, drain: 0, output: 32, capacity: 900, cooling: 4 },
-  { id: 'g-coil', slot: 'generator', name: 'Coil', blurb: 'Balanced, a bit heavy.', weight: 10, drain: 0, output: 58, capacity: 500, cooling: 2 },
+  {
+    id: 'g-ember',
+    slot: 'generator',
+    name: 'Ember',
+    blurb: 'Small, steady output.',
+    weight: 5,
+    drain: 0,
+    output: 45,
+    capacity: 320,
+    cooling: 8,
+  },
+  {
+    id: 'g-furnace',
+    slot: 'generator',
+    name: 'Furnace',
+    blurb: 'Huge output, runs hot.',
+    weight: 12,
+    drain: 0,
+    output: 75,
+    capacity: 400,
+    cooling: -6,
+  },
+  {
+    id: 'g-battery',
+    slot: 'generator',
+    name: 'Battery',
+    blurb: 'Deep tank, slow refill.',
+    weight: 9,
+    drain: 0,
+    output: 32,
+    capacity: 900,
+    cooling: 4,
+  },
+  {
+    id: 'g-coil',
+    slot: 'generator',
+    name: 'Coil',
+    blurb: 'Balanced, a bit heavy.',
+    weight: 10,
+    drain: 0,
+    output: 58,
+    capacity: 500,
+    cooling: 2,
+  },
 
   // ── Right hand weapons ───────────────────────────────
-  { id: 'r-rifle', slot: 'weaponR', name: 'Rifle', blurb: 'Reliable at any range.', weight: 6, drain: 0, weapon: w({ type: 'kinetic', damage: 46, minRange: 0, maxRange: 480, cooldown: 6, heat: 4, energyCost: 0, accuracy: 0.72, ammo: 120 }) },
-  { id: 'r-scatter', slot: 'weaponR', name: 'Scatter', blurb: 'Shotgun. Get close or go home.', weight: 7, drain: 0, weapon: w({ type: 'kinetic', damage: 150, minRange: 0, maxRange: 170, cooldown: 12, heat: 8, energyCost: 0, accuracy: 0.85, ammo: 50 }) },
-  { id: 'r-beam', slot: 'weaponR', name: 'Beam', blurb: 'Laser rifle. Eats energy.', weight: 5, drain: 2, weapon: w({ type: 'energy', damage: 62, minRange: 0, maxRange: 560, cooldown: 7, heat: 9, energyCost: 16, accuracy: 0.78, ammo: null }) },
-  { id: 'r-rail', slot: 'weaponR', name: 'Rail', blurb: 'One slow, enormous shot.', weight: 11, drain: 3, weapon: w({ type: 'energy', damage: 330, minRange: 150, maxRange: 950, cooldown: 38, heat: 26, energyCost: 70, accuracy: 0.66, ammo: null, heavy: true }) },
-  { id: 'r-buzz', slot: 'weaponR', name: 'Buzz', blurb: 'SMG. Sprays and prays.', weight: 4, drain: 0, weapon: w({ type: 'kinetic', damage: 20, minRange: 0, maxRange: 260, cooldown: 2, heat: 2, energyCost: 0, accuracy: 0.62, ammo: 400 }) },
-  { id: 'r-pile', slot: 'weaponR', name: 'Pile', blurb: 'A hydraulic spike. Point blank.', weight: 9, drain: 0, weapon: w({ type: 'melee', damage: 420, minRange: 0, maxRange: 70, cooldown: 22, heat: 10, energyCost: 0, accuracy: 0.8, ammo: null }) },
+  {
+    id: 'r-rifle',
+    slot: 'weaponR',
+    name: 'Rifle',
+    blurb: 'Reliable at any range.',
+    weight: 6,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 46,
+      minRange: 0,
+      maxRange: 480,
+      cooldown: 6,
+      heat: 4,
+      energyCost: 0,
+      accuracy: 0.72,
+      ammo: 120,
+    }),
+  },
+  {
+    id: 'r-scatter',
+    slot: 'weaponR',
+    name: 'Scatter',
+    blurb: 'Shotgun. Get close or go home.',
+    weight: 7,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 150,
+      minRange: 0,
+      maxRange: 170,
+      cooldown: 12,
+      heat: 8,
+      energyCost: 0,
+      accuracy: 0.85,
+      ammo: 50,
+    }),
+  },
+  {
+    id: 'r-beam',
+    slot: 'weaponR',
+    name: 'Beam',
+    blurb: 'Laser rifle. Eats energy.',
+    weight: 5,
+    drain: 2,
+    weapon: w({
+      type: 'energy',
+      damage: 62,
+      minRange: 0,
+      maxRange: 560,
+      cooldown: 7,
+      heat: 9,
+      energyCost: 16,
+      accuracy: 0.78,
+      ammo: null,
+    }),
+  },
+  {
+    id: 'r-rail',
+    slot: 'weaponR',
+    name: 'Rail',
+    blurb: 'One slow, enormous shot.',
+    weight: 11,
+    drain: 3,
+    weapon: w({
+      type: 'energy',
+      damage: 330,
+      minRange: 150,
+      maxRange: 950,
+      cooldown: 38,
+      heat: 26,
+      energyCost: 70,
+      accuracy: 0.66,
+      ammo: null,
+      heavy: true,
+    }),
+  },
+  {
+    id: 'r-buzz',
+    slot: 'weaponR',
+    name: 'Buzz',
+    blurb: 'SMG. Sprays and prays.',
+    weight: 4,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 20,
+      minRange: 0,
+      maxRange: 260,
+      cooldown: 2,
+      heat: 2,
+      energyCost: 0,
+      accuracy: 0.62,
+      ammo: 400,
+    }),
+  },
+  {
+    id: 'r-pile',
+    slot: 'weaponR',
+    name: 'Pile',
+    blurb: 'A hydraulic spike. Point blank.',
+    weight: 9,
+    drain: 0,
+    weapon: w({
+      type: 'melee',
+      damage: 420,
+      minRange: 0,
+      maxRange: 70,
+      cooldown: 22,
+      heat: 10,
+      energyCost: 0,
+      accuracy: 0.8,
+      ammo: null,
+    }),
+  },
 
   // ── Left hand: weapons + shields ─────────────────────
-  { id: 'lw-pistol', slot: 'weaponL', name: 'Pistol', blurb: 'Light sidearm.', weight: 3, drain: 0, weapon: w({ type: 'kinetic', damage: 34, minRange: 0, maxRange: 320, cooldown: 6, heat: 3, energyCost: 0, accuracy: 0.74, ammo: 150 }) },
-  { id: 'lw-saber', slot: 'weaponL', name: 'Saber', blurb: 'Plasma blade. Ignores armor a bit.', weight: 5, drain: 3, weapon: w({ type: 'melee', damage: 260, minRange: 0, maxRange: 75, cooldown: 14, heat: 14, energyCost: 20, accuracy: 0.82, ammo: null }) },
-  { id: 'lw-flamer', slot: 'weaponL', name: 'Flamer', blurb: 'Burns armor and the user.', weight: 6, drain: 0, weapon: w({ type: 'energy', damage: 35, minRange: 0, maxRange: 150, cooldown: 2, heat: 7, energyCost: 3, accuracy: 0.86, ammo: null }) },
-  { id: 'lw-lance', slot: 'weaponL', name: 'Lance', blurb: 'Pulse laser, mid range.', weight: 4, drain: 2, weapon: w({ type: 'energy', damage: 48, minRange: 0, maxRange: 420, cooldown: 6, heat: 7, energyCost: 12, accuracy: 0.76, ammo: null }) },
-  { id: 'lw-door', slot: 'weaponL', name: 'Door', blurb: 'A shield made of an actual door.', weight: 9, drain: 1, shield: { block: 0.45, energyPerHit: 0 } },
-  { id: 'lw-aegis', slot: 'weaponL', name: 'Aegis', blurb: 'Energy shield. Blocks a lot, costs a lot.', weight: 4, drain: 4, shield: { block: 0.7, energyPerHit: 14 } },
+  {
+    id: 'lw-pistol',
+    slot: 'weaponL',
+    name: 'Pistol',
+    blurb: 'Light sidearm.',
+    weight: 3,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 34,
+      minRange: 0,
+      maxRange: 320,
+      cooldown: 6,
+      heat: 3,
+      energyCost: 0,
+      accuracy: 0.74,
+      ammo: 150,
+    }),
+  },
+  {
+    id: 'lw-saber',
+    slot: 'weaponL',
+    name: 'Saber',
+    blurb: 'Plasma blade. Ignores armor a bit.',
+    weight: 5,
+    drain: 3,
+    weapon: w({
+      type: 'melee',
+      damage: 260,
+      minRange: 0,
+      maxRange: 75,
+      cooldown: 14,
+      heat: 14,
+      energyCost: 20,
+      accuracy: 0.82,
+      ammo: null,
+    }),
+  },
+  {
+    id: 'lw-flamer',
+    slot: 'weaponL',
+    name: 'Flamer',
+    blurb: 'Burns armor and the user.',
+    weight: 6,
+    drain: 0,
+    weapon: w({
+      type: 'energy',
+      damage: 35,
+      minRange: 0,
+      maxRange: 150,
+      cooldown: 2,
+      heat: 7,
+      energyCost: 3,
+      accuracy: 0.86,
+      ammo: null,
+    }),
+  },
+  {
+    id: 'lw-lance',
+    slot: 'weaponL',
+    name: 'Lance',
+    blurb: 'Pulse laser, mid range.',
+    weight: 4,
+    drain: 2,
+    weapon: w({
+      type: 'energy',
+      damage: 48,
+      minRange: 0,
+      maxRange: 420,
+      cooldown: 6,
+      heat: 7,
+      energyCost: 12,
+      accuracy: 0.76,
+      ammo: null,
+    }),
+  },
+  {
+    id: 'lw-door',
+    slot: 'weaponL',
+    name: 'Door',
+    blurb: 'A shield made of an actual door.',
+    weight: 9,
+    drain: 1,
+    shield: { block: 0.45, energyPerHit: 0 },
+  },
+  {
+    id: 'lw-aegis',
+    slot: 'weaponL',
+    name: 'Aegis',
+    blurb: 'Energy shield. Blocks a lot, costs a lot.',
+    weight: 4,
+    drain: 4,
+    shield: { block: 0.7, energyPerHit: 14 },
+  },
 
   // ── Back units ───────────────────────────────────────
-  { id: 'bk-swarm', slot: 'back', name: 'Swarm', blurb: 'Homing missiles. Hard to dodge.', weight: 8, drain: 1, weapon: w({ type: 'explosive', damage: 110, minRange: 120, maxRange: 750, cooldown: 30, heat: 10, energyCost: 0, accuracy: 0.85, ammo: 24, homing: true }) },
-  { id: 'bk-howitzer', slot: 'back', name: 'Howitzer', blurb: 'Big cannon. Plant your feet.', weight: 16, drain: 1, weapon: w({ type: 'explosive', damage: 360, minRange: 200, maxRange: 900, cooldown: 44, heat: 22, energyCost: 0, accuracy: 0.52, ammo: 14, heavy: true }) },
-  { id: 'bk-orbit', slot: 'back', name: 'Orbit', blurb: 'Laser drone that fires on its own.', weight: 5, drain: 5, weapon: w({ type: 'energy', damage: 30, minRange: 0, maxRange: 500, cooldown: 5, heat: 3, energyCost: 8, accuracy: 0.7, ammo: null }) },
-  { id: 'bk-plate', slot: 'back', name: 'Plate', blurb: 'Bolted-on armor. Heavy.', weight: 14, drain: 0, utility: { hp: 650, armorK: 0.08, armorE: 0.04 } },
-  { id: 'bk-dish', slot: 'back', name: 'Dish', blurb: 'Radar. Better aim, longer reach.', weight: 5, drain: 4, utility: { sensor: 900, accuracy: 0.14, range: 0.15 } },
-  { id: 'bk-chaff', slot: 'back', name: 'Chaff', blurb: 'Jammer. Enemy aim gets worse.', weight: 4, drain: 5, utility: { jam: 0.17 } },
-  { id: 'bk-fins', slot: 'back', name: 'Fins', blurb: 'Extra cooling. Spam freely.', weight: 4, drain: 1, utility: { cooling: 34, hp: 150 } },
+  {
+    id: 'bk-swarm',
+    slot: 'back',
+    name: 'Swarm',
+    blurb: 'Homing missiles. Hard to dodge.',
+    weight: 8,
+    drain: 1,
+    weapon: w({
+      type: 'explosive',
+      damage: 110,
+      minRange: 120,
+      maxRange: 750,
+      cooldown: 30,
+      heat: 10,
+      energyCost: 0,
+      accuracy: 0.85,
+      ammo: 24,
+      homing: true,
+    }),
+  },
+  {
+    id: 'bk-howitzer',
+    slot: 'back',
+    name: 'Howitzer',
+    blurb: 'Big cannon. Plant your feet.',
+    weight: 16,
+    drain: 1,
+    weapon: w({
+      type: 'explosive',
+      damage: 360,
+      minRange: 200,
+      maxRange: 900,
+      cooldown: 44,
+      heat: 22,
+      energyCost: 0,
+      accuracy: 0.52,
+      ammo: 14,
+      heavy: true,
+    }),
+  },
+  {
+    id: 'bk-orbit',
+    slot: 'back',
+    name: 'Orbit',
+    blurb: 'Laser drone that fires on its own.',
+    weight: 5,
+    drain: 5,
+    weapon: w({
+      type: 'energy',
+      damage: 30,
+      minRange: 0,
+      maxRange: 500,
+      cooldown: 5,
+      heat: 3,
+      energyCost: 8,
+      accuracy: 0.7,
+      ammo: null,
+    }),
+  },
+  {
+    id: 'bk-plate',
+    slot: 'back',
+    name: 'Plate',
+    blurb: 'Bolted-on armor. Heavy.',
+    weight: 14,
+    drain: 0,
+    utility: { hp: 650, armorK: 0.08, armorE: 0.04 },
+  },
+  {
+    id: 'bk-dish',
+    slot: 'back',
+    name: 'Dish',
+    blurb: 'Radar. Better aim, longer reach.',
+    weight: 5,
+    drain: 4,
+    utility: { sensor: 900, accuracy: 0.14, range: 0.15 },
+  },
+  {
+    id: 'bk-chaff',
+    slot: 'back',
+    name: 'Chaff',
+    blurb: 'Jammer. Enemy aim gets worse.',
+    weight: 4,
+    drain: 5,
+    utility: { jam: 0.17 },
+  },
+  {
+    id: 'bk-fins',
+    slot: 'back',
+    name: 'Fins',
+    blurb: 'Extra cooling. Spam freely.',
+    weight: 4,
+    drain: 1,
+    utility: { cooling: 34, hp: 150 },
+  },
 
   // ── Pilot chips ──────────────────────────────────────
-  { id: 'p-rush', slot: 'chip', name: 'Rush', behavior: 'rush', blurb: 'Closes the gap, fights close.', weight: 0, drain: 0 },
-  { id: 'p-kite', slot: 'chip', name: 'Kite', behavior: 'kite', blurb: 'Keeps distance, backs off.', weight: 0, drain: 0 },
-  { id: 'p-turtle', slot: 'chip', name: 'Turtle', behavior: 'turtle', blurb: 'Holds ground, saves energy.', weight: 0, drain: 0 },
-  { id: 'p-sniper', slot: 'chip', name: 'Sniper', behavior: 'sniper', blurb: 'Stops to aim. Max range.', weight: 0, drain: 0 },
-  { id: 'p-berserk', slot: 'chip', name: 'Berserk', behavior: 'berserk', blurb: 'Fires through overheat. Burns itself.', weight: 0, drain: 0 },
-  { id: 'p-flank', slot: 'chip', name: 'Flank', behavior: 'flank', blurb: 'Circles the enemy, hard to pin.', weight: 0, drain: 0 },
+  {
+    id: 'p-rush',
+    slot: 'chip',
+    name: 'Rush',
+    behavior: 'rush',
+    blurb: 'Closes the gap, fights close.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-kite',
+    slot: 'chip',
+    name: 'Kite',
+    behavior: 'kite',
+    blurb: 'Keeps distance, backs off.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-turtle',
+    slot: 'chip',
+    name: 'Turtle',
+    behavior: 'turtle',
+    blurb: 'Holds ground, saves energy.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-sniper',
+    slot: 'chip',
+    name: 'Sniper',
+    behavior: 'sniper',
+    blurb: 'Stops to aim. Max range.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-berserk',
+    slot: 'chip',
+    name: 'Berserk',
+    behavior: 'berserk',
+    blurb: 'Fires through overheat. Burns itself.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-flank',
+    slot: 'chip',
+    name: 'Flank',
+    behavior: 'flank',
+    blurb: 'Circles the enemy, hard to pin.',
+    weight: 0,
+    drain: 0,
+  },
 ];
 
-export const PART_BY_ID: Record<string, Part> = Object.fromEntries(PARTS.map((p) => [p.id, p]));
+export const PART_BY_ID: Record<string, Part> = Object.fromEntries(
+  PARTS.map((p) => [p.id, p])
+);
 
-export const partsForSlot = (slot: Slot): Part[] => PARTS.filter((p) => p.slot === slot);
+export const partsForSlot = (slot: Slot): Part[] =>
+  PARTS.filter((p) => p.slot === slot);
 
 export const getPart = (id: string): Part => {
   const p = PART_BY_ID[id];

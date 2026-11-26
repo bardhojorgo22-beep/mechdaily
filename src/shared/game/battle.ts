@@ -1,5 +1,11 @@
 import type { Arena } from './arenas';
-import { computeStats, type Build, type MechStats, type MountedWeapon, type Tax } from './mech';
+import {
+  computeStats,
+  type Build,
+  type MechStats,
+  type MountedWeapon,
+  type Tax,
+} from './mech';
 import { clamp, createRng } from './rng';
 
 export const TICKS_PER_SECOND = 10;
@@ -47,7 +53,12 @@ type MechState = {
   dealt: number;
 };
 
-const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechState => ({
+const newState = (
+  s: MechStats,
+  x: number,
+  y: number,
+  seedOffset: number
+): MechState => ({
   s,
   x,
   y,
@@ -70,14 +81,18 @@ const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
 const usable = (m: MechState, i: number) => {
   const wp = m.s.weapons[i]!;
   const ammo = m.ammo[i];
-  return (ammo === null || (ammo !== undefined && ammo > 0)) && (wp.energyCost === 0 || m.s.energyCap >= wp.energyCost);
+  return (
+    (ammo === null || (ammo !== undefined && ammo > 0)) &&
+    (wp.energyCost === 0 || m.s.energyCap >= wp.energyCost)
+  );
 };
 
 /** The distance this pilot wants to fight at. */
 const desiredRange = (m: MechState, arena: Arena): number => {
   const ranges: { min: number; max: number }[] = [];
   m.s.weapons.forEach((wp, i) => {
-    if (usable(m, i)) ranges.push({ min: wp.minRange, max: reach(m, wp, arena) });
+    if (usable(m, i))
+      ranges.push({ min: wp.minRange, max: reach(m, wp, arena) });
   });
   if (ranges.length === 0) return 0; // out of ammo: charge and hope
   const maxes = ranges.map((r) => r.max).sort((a, b) => a - b);
@@ -114,7 +129,12 @@ const armorAgainst = (target: MechStats, type: MountedWeapon['type']) => {
 
 export type Fighter = { build: Build; tax?: Tax };
 
-export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: string): BattleResult => {
+export const simulateBattle = (
+  a: Fighter,
+  b: Fighter,
+  arena: Arena,
+  seed: string
+): BattleResult => {
   const rng = createRng(`battle:${seed}`);
   const W = arena.width;
   const H = arena.height;
@@ -127,7 +147,13 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
   const hazardHits: number[] = [];
   const pushFrame = () => {
     for (const m of mechs) {
-      frames.push(Math.round(m.x), Math.round(m.y), Math.max(0, Math.round(m.hp)), Math.round(m.heat), Math.round(m.energy));
+      frames.push(
+        Math.round(m.x),
+        Math.round(m.y),
+        Math.max(0, Math.round(m.hp)),
+        Math.round(m.heat),
+        Math.round(m.energy)
+      );
     }
   };
   pushFrame();
@@ -160,7 +186,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       let strafe = 0.15;
       if (me.s.behavior === 'flank') strafe = 0.85;
       else if (me.s.behavior === 'kite') strafe = 0.4;
-      else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk') strafe = 0.12;
+      else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk')
+        strafe = 0.12;
       if (tick % 37 === 0 && rng.chance(0.6)) me.strafeSign *= -1;
 
       // Backed into a wall? Slide along it instead of getting pinned.
@@ -170,7 +197,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         radial = -0.2;
         const tx = -uy * me.strafeSign;
         const ty = ux * me.strafeSign;
-        if (me.x + tx * 60 < 20 || me.x + tx * 60 > W - 20 || me.y + ty * 60 < 20 || me.y + ty * 60 > H - 20) {
+        if (
+          me.x + tx * 60 < 20 ||
+          me.x + tx * 60 > W - 20 ||
+          me.y + ty * 60 < 20 ||
+          me.y + ty * 60 > H - 20
+        ) {
           me.strafeSign *= -1;
         }
       }
@@ -179,7 +211,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       let my = uy * radial + ux * strafe * me.strafeSign;
       const mag = Math.sqrt(mx * mx + my * my);
 
-      const sniperSet = me.s.behavior === 'sniper' && radial >= 0 && dist <= want + band;
+      const sniperSet =
+        me.s.behavior === 'sniper' && radial >= 0 && dist <= want + band;
       const turtleSet = me.s.behavior === 'turtle' && radial <= 0;
       if (me.planted > 0 || sniperSet || turtleSet || mag < 0.001) {
         me.moving = false;
@@ -229,14 +262,18 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         me.heat += wp.heat * arena.heatGen;
         me.energy -= wp.energyCost;
         if (ammo !== null && ammo !== undefined) me.ammo[w] = ammo - 1;
-        if (wp.heavy && me.s.legType !== 'tank') me.planted = Math.max(me.planted, 6);
+        if (wp.heavy && me.s.legType !== 'tank')
+          me.planted = Math.max(me.planted, 6);
 
         let acc = wp.accuracy * me.s.accuracy * (1 - foe.s.jam);
         if (me.s.behavior === 'sniper' && !me.moving) acc *= 1.42;
         if (me.s.behavior === 'turtle') acc *= 1.12;
         if (wp.type === 'explosive') acc *= arena.explosiveAccuracy;
         acc *= 1 - 0.25 * (dist / wp.maxRange);
-        let ev = foe.s.evasion * (foe.moving ? 1 : 0.3) * (0.5 + 0.5 * (dist / wp.maxRange));
+        let ev =
+          foe.s.evasion *
+          (foe.moving ? 1 : 0.3) *
+          (0.5 + 0.5 * (dist / wp.maxRange));
         if (foe.s.behavior === 'kite' && foe.moving) ev *= 1.2;
         if (wp.homing) ev *= 0.4;
         const p = clamp(acc * (1 - ev), 0.05, 0.97);
@@ -245,7 +282,10 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         let dmg = 0;
         let blocked = false;
         if (hit) {
-          dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
+          dmg =
+            wp.damage *
+            DAMAGE_SCALE *
+            (wp.type === 'energy' ? arena.energyDamage : 1);
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.8; // braced
           if (foe.s.behavior === 'rush') dmg *= 1.08; // reckless
           dmg *= 1 - armorAgainst(foe.s, wp.type);
@@ -254,14 +294,26 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
             const canAfford = foe.energy >= sh.energyPerHit;
             if (canAfford) {
               foe.energy -= sh.energyPerHit;
-              dmg *= 1 - (wp.type === 'melee' && sh.energyPerHit > 0 ? sh.block * 0.4 : sh.block);
+              dmg *=
+                1 -
+                (wp.type === 'melee' && sh.energyPerHit > 0
+                  ? sh.block * 0.4
+                  : sh.block);
               blocked = true;
             }
           }
           pending.push({ target: i === 0 ? 1 : 0, dmg });
           me.dealt += dmg;
         }
-        events.push({ t: tick, by: i === 0 ? 0 : 1, slot: wp.slot, type: wp.type, hit, dmg: Math.round(dmg), blocked });
+        events.push({
+          t: tick,
+          by: i === 0 ? 0 : 1,
+          slot: wp.slot,
+          type: wp.type,
+          hit,
+          dmg: Math.round(dmg),
+          blocked,
+        });
       });
     }
     for (const p of pending) mechs[p.target]!.hp -= p.dmg;

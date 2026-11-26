@@ -20,23 +20,20 @@
   "menu": {
     "items": [
       {
-        "label": "Create a new post",
-        "description": "mechdaily",
+        "label": "Mech Daily: open today's post",
+        "description": "Creates today's post if it doesn't exist",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
       },
       {
-        "label": "Example form",
-        "description": "Show a simple form",
+        "label": "Mech Daily: run tournament now",
+        "description": "Ends the current day early (testing)",
         "location": "subreddit",
         "forUserType": "moderator",
-        "endpoint": "/internal/menu/example-form"
+        "endpoint": "/internal/menu/run-tournament"
       }
     ]
-  },
-  "forms": {
-    "exampleForm": "/internal/form/example-submit"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install"
@@ -47,5 +44,18 @@
   },
   "dev": {
     "subreddit": "mechdaily_dev"
+  },
+  "scheduler": {
+    "tasks": {
+      "daily-rollover": {
+        "endpoint": "/internal/scheduler/daily-rollover",
+        "cron": "0 0 * * *"
+      }
+    }
+  },
+  "permissions": {
+    "reddit": {
+      "enable": true
+    }
   }
 }

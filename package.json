@@ -22,6 +22,8 @@
   "dependencies": {
     "@devvit/start": "0.15.6",
     "@devvit/web": "0.15.6",
+    "@fontsource/big-shoulders-display": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@hono/node-server": "2.1.6",
     "devvit": "0.15.6",
     "hono": "4.13.17",

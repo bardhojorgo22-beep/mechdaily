@@ -1,60 +1,62 @@
+import './fonts';
 import './index.css';
 
-import { navigateTo } from '@devvit/web/client';
-import { context, requestExpandedMode } from '@devvit/web/client';
-import { StrictMode } from 'react';
+import { requestExpandedMode } from '@devvit/web/client';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import type { InitResponse } from '../shared/api';
+import { getArena } from '../shared/game/arenas';
+import { DEFAULT_BUILD } from '../shared/game/mech';
+import { MechArt } from './components/MechArt';
+import { api, countdown } from './lib/api';
 
 export const Splash = () => {
+  const [data, setData] = useState<InitResponse | null>(null);
+  useEffect(() => {
+    api
+      .init()
+      .then(setData)
+      .catch(() => setData(null));
+  }, []);
+
+  const old = data ? data.postDay !== data.day : false;
+  const arena = getArena(data?.arenaId ?? 'yard');
+  const hero =
+    data?.myEntry ??
+    data?.myBuild ??
+    data?.champions[0]?.build ??
+    DEFAULT_BUILD;
+
   return (
-    <div className="flex relative flex-col justify-center items-center min-h-screen gap-4 bg-white dark:bg-gray-900">
-      <img
-        className="object-contain w-1/2 max-w-[250px] mx-auto"
-        src="/snoo.png"
-        alt="Snoo"
-      />
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
-          Hey {context.username ?? 'user'} 👋
-        </h1>
-        <p className="text-base text-center text-gray-600 dark:text-gray-300">
-          Edit{' '}
-          <span className="bg-[#e5ebee] dark:bg-gray-700 px-1 py-0.5 rounded">
-            src/client/splash.tsx
-          </span>{' '}
-          to get started.
-        </p>
+    <div className="grid-paper min-h-screen flex flex-col items-center justify-center gap-3 p-4 text-center">
+      <div className="font-display font-black text-5xl leading-[0.85] tracking-tight">
+        MECH DAILY
       </div>
-      <div className="flex items-center justify-center mt-5">
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-auto h-10 rounded-full cursor-pointer transition-colors px-4 hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-        >
-          Tap to Start
-        </button>
-      </div>
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://developers.reddit.com/docs')}
-        >
-          Docs
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-        >
-          r/Devvit
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://discord.com/invite/R7yu2wh9Qz')}
-        >
-          Discord
-        </button>
-      </footer>
+      {data && (
+        <div className="text-xs">
+          Day {old ? data.postDayNumber : data.dayNumber} ·{' '}
+          {old
+            ? 'results are in'
+            : `${arena.name} · bracket in ${countdown(data.nextRolloverIso)}`}
+        </div>
+      )}
+      <MechArt build={hero} size={120} />
+      {data && !old && (
+        <div className="text-[11px] text-mute">
+          {data.entryCount} pilot{data.entryCount === 1 ? '' : 's'} entered
+          {data.champions[0] ? ` · last champ: ${data.champions[0].name}` : ''}
+        </div>
+      )}
+      <button
+        className="btn bg-rust text-white text-xl px-8"
+        onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+      >
+        {old
+          ? 'See results'
+          : data?.myEntry
+            ? 'Tune your mech'
+            : 'Build your mech'}
+      </button>
     </div>
   );
 };

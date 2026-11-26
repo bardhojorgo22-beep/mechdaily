@@ -1,1 +1,82 @@
 @import 'tailwindcss';
+
+@theme {
+  --color-paper: #efe8da;
+  --color-card: #f8f4ec;
+  --color-ink: #1b1a17;
+  --color-rust: #e4572e;
+  --color-teal: #17bebb;
+  --color-sun: #ffc914;
+  --color-steel: #5d6b73;
+  --color-mute: #7a7468;
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* faint workshop grid */
+.grid-paper {
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(rgba(27, 26, 23, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 26, 23, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.sticker {
+  background: var(--color-card);
+  border: 3px solid var(--color-ink);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+.btn {
+  font-family: var(--font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 3px solid var(--color-ink);
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 var(--color-ink);
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  transition:
+    transform 80ms,
+    box-shadow 80ms;
+  user-select: none;
+}
+.btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--color-ink);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tag {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  white-space: nowrap;
+}
+
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}

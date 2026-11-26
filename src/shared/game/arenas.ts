@@ -37,8 +37,19 @@ const base: Omit<Arena, 'id' | 'name' | 'blurb'> = {
 };
 
 export const ARENAS: Arena[] = [
-  { ...base, id: 'yard', name: 'The Yard', blurb: 'No tricks today. Straight fight.' },
-  { ...base, id: 'fog', name: 'Fog Bank', blurb: "You can't shoot what you can't see. Sensors matter.", fog: true },
+  {
+    ...base,
+    id: 'yard',
+    name: 'The Yard',
+    blurb: 'No tricks today. Straight fight.',
+  },
+  {
+    ...base,
+    id: 'fog',
+    name: 'Fog Bank',
+    blurb: "You can't shoot what you can't see. Sensors matter.",
+    fog: true,
+  },
   {
     ...base,
     id: 'mud',
@@ -46,7 +57,14 @@ export const ARENAS: Arena[] = [
     blurb: 'Legs sink. Treads grind on. Hover floats over it.',
     legSpeed: { biped: 0.55, reverse: 0.5, quad: 0.65, tank: 0.85, hover: 1 },
   },
-  { ...base, id: 'heat', name: 'Heatwave', blurb: 'Everything runs hot. Cooling wins.', heatGen: 1.45, cooling: 0.6 },
+  {
+    ...base,
+    id: 'heat',
+    name: 'Heatwave',
+    blurb: 'Everything runs hot. Cooling wins.',
+    heatGen: 1.45,
+    cooling: 0.6,
+  },
   {
     ...base,
     id: 'storm',
@@ -65,12 +83,34 @@ export const ARENAS: Arena[] = [
     explosiveAccuracy: 0.8,
     evasion: { reverse: 1.25, biped: 1.1 },
   },
-  { ...base, id: 'alley', name: 'Narrow Alley', blurb: 'Tiny map. Nowhere to run.', width: 520, height: 320 },
-  { ...base, id: 'plains', name: 'Salt Flats', blurb: 'Huge open map. Long guns rule.', width: 1600, height: 900 },
-  { ...base, id: 'scrap', name: 'Scrap Rain', blurb: 'Junk falls from the sky. Bring armor.', hazard: { damage: 70, every: 25 } },
+  {
+    ...base,
+    id: 'alley',
+    name: 'Narrow Alley',
+    blurb: 'Tiny map. Nowhere to run.',
+    width: 520,
+    height: 320,
+  },
+  {
+    ...base,
+    id: 'plains',
+    name: 'Salt Flats',
+    blurb: 'Huge open map. Long guns rule.',
+    width: 1600,
+    height: 900,
+  },
+  {
+    ...base,
+    id: 'scrap',
+    name: 'Scrap Rain',
+    blurb: 'Junk falls from the sky. Bring armor.',
+    hazard: { damage: 70, every: 25 },
+  },
 ];
 
-export const ARENA_BY_ID: Record<string, Arena> = Object.fromEntries(ARENAS.map((a) => [a.id, a]));
+export const ARENA_BY_ID: Record<string, Arena> = Object.fromEntries(
+  ARENAS.map((a) => [a.id, a])
+);
 
 export const getArena = (id: string): Arena => ARENA_BY_ID[id] ?? ARENAS[0]!;
 
@@ -106,6 +146,7 @@ export const arenaForDay = (day: string): Arena => {
   const pos = ((n % len) + len) % len;
   const order = cycleOrder(cycle);
   const prevLast = cycleOrder(cycle - 1)[len - 1]!;
-  if (order[0]!.id === prevLast.id) [order[0], order[1]] = [order[1]!, order[0]!];
+  if (order[0]!.id === prevLast.id)
+    [order[0], order[1]] = [order[1]!, order[0]!];
   return order[pos]!;
 };

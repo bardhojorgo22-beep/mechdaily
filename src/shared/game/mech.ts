@@ -21,9 +21,36 @@ export type Build = {
 /** Popularity tax per part id, 0 (nobody uses it) .. 1 (everyone does). */
 export type Tax = Record<string, number>;
 
-export const BODY_COLORS = ['#c9b79c', '#5b6b4e', '#8a3b2e', '#2f4858', '#d9a441', '#6d5a72', '#3c3c3c', '#e8e2d4'];
-export const TRIM_COLORS = ['#f2542d', '#0e9594', '#f5dfbb', '#127475', '#562c2c', '#ffd23f', '#111111', '#7cb518'];
-export const DECALS = ['none', 'stripe', 'skull', 'star', 'number', 'hazard', 'eye', 'bolt'];
+export const BODY_COLORS = [
+  '#c9b79c',
+  '#5b6b4e',
+  '#8a3b2e',
+  '#2f4858',
+  '#d9a441',
+  '#6d5a72',
+  '#3c3c3c',
+  '#e8e2d4',
+];
+export const TRIM_COLORS = [
+  '#f2542d',
+  '#0e9594',
+  '#f5dfbb',
+  '#127475',
+  '#562c2c',
+  '#ffd23f',
+  '#111111',
+  '#7cb518',
+];
+export const DECALS = [
+  'none',
+  'stripe',
+  'skull',
+  'star',
+  'number',
+  'hazard',
+  'eye',
+  'bolt',
+];
 
 export const DEFAULT_BUILD: Build = {
   name: 'Rookie',
@@ -44,7 +71,10 @@ export const DEFAULT_BUILD: Build = {
 
 export const sanitizeName = (raw: unknown): string => {
   const s = typeof raw === 'string' ? raw : '';
-  const cleaned = s.replace(/[^\p{L}\p{N} _\-'.]/gu, '').trim().slice(0, 18);
+  const cleaned = s
+    .replace(/[^\p{L}\p{N} _\-'.]/gu, '')
+    .trim()
+    .slice(0, 18);
   return cleaned.length > 0 ? cleaned : 'Unnamed';
 };
 
@@ -62,8 +92,10 @@ export const validateBuild = (raw: unknown): Build | null => {
     ids[slot] = id;
   }
   const paintRaw: unknown = Reflect.get(raw, 'paint');
-  const paintIn: object = typeof paintRaw === 'object' && paintRaw !== null ? paintRaw : {};
-  const idx = (v: unknown, n: number) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < n ? v : 0);
+  const paintIn: object =
+    typeof paintRaw === 'object' && paintRaw !== null ? paintRaw : {};
+  const idx = (v: unknown, n: number) =>
+    typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < n ? v : 0;
   const pick = (slot: Slot) => ids[slot] ?? DEFAULT_BUILD.parts[slot];
   return {
     name: sanitizeName(Reflect.get(raw, 'name')),
@@ -87,7 +119,10 @@ export const validateBuild = (raw: unknown): Build | null => {
   };
 };
 
-export type MountedWeapon = Weapon & { slot: 'weaponR' | 'weaponL' | 'back'; partId: string };
+export type MountedWeapon = Weapon & {
+  slot: 'weaponR' | 'weaponL' | 'back';
+  partId: string;
+};
 
 export type MechStats = {
   hp: number;
@@ -117,7 +152,11 @@ export type MechStats = {
 const taxWeight = (t: number) => 1 + 0.45 * t;
 const taxEff = (t: number) => 1 - 0.18 * t;
 
-export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechStats => {
+export const computeStats = (
+  build: Build,
+  arena: Arena,
+  tax: Tax = {}
+): MechStats => {
   let hp = 0;
   let armorK = 0;
   let armorE = 0;
@@ -188,9 +227,17 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
         break;
       default:
         if ('weapon' in part) {
-          weapons.push({ ...part.weapon, damage: part.weapon.damage * eff, slot: part.slot, partId: part.id });
+          weapons.push({
+            ...part.weapon,
+            damage: part.weapon.damage * eff,
+            slot: part.slot,
+            partId: part.id,
+          });
         } else if ('shield' in part) {
-          shield = { block: part.shield.block * eff, energyPerHit: part.shield.energyPerHit };
+          shield = {
+            block: part.shield.block * eff,
+            energyPerHit: part.shield.energyPerHit,
+          };
         } else if ('utility' in part) {
           const u = part.utility;
           hp += (u.hp ?? 0) * eff;
@@ -207,12 +254,26 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
 
   const overweight = Math.max(0, weight / load - 1);
   // Overweight hurts a lot: 20% over = roughly half speed.
-  const weightFactor = overweight > 0 ? 1 / (1 + overweight * overweight * 12 + overweight * 2) : 1;
+  const weightFactor =
+    overweight > 0
+      ? 1 / (1 + overweight * overweight * 12 + overweight * 2)
+      : 1;
   const legSpeed = arena.legSpeed[legType] ?? 1;
   // Heavier mechs are slower even under the limit.
   const massFactor = 1 / (1 + weight / 160);
-  const speed = thrust * mobility * weightFactor * legSpeed * arena.speed * massFactor * 1.35;
-  const evasion = clamp((speed / 520) * legEvasion * (arena.evasion[legType] ?? 1), 0, 0.55);
+  const speed =
+    thrust *
+    mobility *
+    weightFactor *
+    legSpeed *
+    arena.speed *
+    massFactor *
+    1.35;
+  const evasion = clamp(
+    (speed / 520) * legEvasion * (arena.evasion[legType] ?? 1),
+    0,
+    0.55
+  );
 
   return {
     hp: Math.round(hp),
@@ -234,7 +295,10 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
     rangeBonus,
     legType,
     behavior,
-    weapons: weapons.map((wp) => ({ ...wp, maxRange: wp.maxRange * (1 + rangeBonus) })),
+    weapons: weapons.map((wp) => ({
+      ...wp,
+      maxRange: wp.maxRange * (1 + rangeBonus),
+    })),
     shield,
   };
 };
