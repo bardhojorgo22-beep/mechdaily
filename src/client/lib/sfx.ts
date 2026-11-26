@@ -205,6 +205,15 @@ export const sfx = {
       if (tier >= 2) crowd(0.6, 0.18);
     }
   },
+  charge: () => {
+    if (!throttle('charge', 250)) return;
+    tone(180, 900, 0.45, 'sawtooth', 0.07);
+    tone(360, 1800, 0.45, 'square', 0.03);
+  },
+  pow: (big: boolean) => {
+    noise(big ? 0.5 : 0.25, big ? 0.6 : 0.4, big ? 1200 : 2200);
+    tone(big ? 90 : 140, 35, big ? 0.4 : 0.2, 'square', 0.22);
+  },
   qb: (side: 0 | 1) => {
     if (!throttle(`qb-${side}`, 90)) return;
     noise(0.18, 0.32, side === 0 ? 2600 : 2100);

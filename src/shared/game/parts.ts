@@ -58,6 +58,7 @@ export type Weapon = {
   ammo: number | null; // null = unlimited (energy weapons)
   homing?: boolean;
   heavy?: boolean; // non-tank legs must plant to fire
+  charge?: boolean; // melee: hits harder the faster you're closing in
 };
 
 type PartBase = {
@@ -568,7 +569,7 @@ export const PARTS: Part[] = [
       damage: 716,
       minRange: 255,
       maxRange: 1615,
-      cooldown: 55,
+      cooldown: 50,
       heat: 42,
       energyCost: 112,
       accuracy: 0.8,
@@ -604,7 +605,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'melee',
-      damage: 491,
+      damage: 471,
       minRange: 0,
       maxRange: 119,
       cooldown: 35,
@@ -612,6 +613,26 @@ export const PARTS: Part[] = [
       energyCost: 0,
       accuracy: 0.87,
       ammo: null,
+    }),
+  },
+  {
+    id: 'r-lance',
+    slot: 'weaponR',
+    name: 'Lance',
+    blurb: 'Long spear. Hits harder the faster you charge.',
+    weight: 11,
+    drain: 0,
+    weapon: w({
+      type: 'melee',
+      damage: 280,
+      minRange: 0,
+      maxRange: 200,
+      cooldown: 40,
+      heat: 14,
+      energyCost: 0,
+      accuracy: 0.84,
+      ammo: null,
+      charge: true,
     }),
   },
 
@@ -644,13 +665,32 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'melee',
-      damage: 376,
+      damage: 346,
       minRange: 0,
       maxRange: 128,
       cooldown: 22,
       heat: 22,
       energyCost: 32,
       accuracy: 0.82,
+      ammo: null,
+    }),
+  },
+  {
+    id: 'lw-knuckle',
+    slot: 'weaponL',
+    name: 'Knuckle',
+    blurb: 'A giant fist. Fast jabs, staggers on hit.',
+    weight: 7,
+    drain: 0,
+    weapon: w({
+      type: 'melee',
+      damage: 170,
+      minRange: 0,
+      maxRange: 110,
+      cooldown: 11,
+      heat: 8,
+      energyCost: 0,
+      accuracy: 0.9,
       ammo: null,
     }),
   },
@@ -676,7 +716,7 @@ export const PARTS: Part[] = [
   {
     id: 'lw-lance',
     slot: 'weaponL',
-    name: 'Lance',
+    name: 'Pulse',
     blurb: 'Pulse laser, mid range.',
     weight: 4,
     drain: 2,

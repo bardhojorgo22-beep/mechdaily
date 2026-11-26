@@ -74,6 +74,8 @@ type Fx =
   | 'missiles'
   | 'shell'
   | 'spike'
+  | 'thrust'
+  | 'punch'
   | 'slash';
 
 const FX_BY_PART: Record<string, Fx> = {
@@ -89,6 +91,8 @@ const FX_BY_PART: Record<string, Fx> = {
   'bk-swarm': 'missiles',
   'bk-howitzer': 'shell',
   'r-pile': 'spike',
+  'r-lance': 'thrust',
+  'lw-knuckle': 'punch',
   'lw-saber': 'slash',
 };
 
@@ -434,6 +438,14 @@ export const createRenderer = (
   ];
   const pieces: Piece[] = [];
   const dazedUntil = [0, 0];
+  // melee strikes per mech, for the charge-up telegraph
+  const meleeTimes: number[][] = [[], []];
+  for (const ev of result.events) if (ev.type === 'melee') meleeTimes[ev.by]!.push(ev.t);
+  const meleeSlotAt: Record<string, ShotEvent['slot']> = {};
+  for (const ev of result.events) if (ev.type === 'melee') meleeSlotAt[`${ev.by}:${ev.t}`] = ev.slot;
+  const chargeSounded = new Set<string>();
+  const WINDUP = 6; // ticks of charge-up before a melee strike
+  const bursts: { x: number; y: number; t: number; word: string; big: boolean }[] = [];
   const brokenUp = [false, false];
   const vel = [
     { x: 0, y: 0, ratio: 0 },
@@ -706,7 +718,20 @@ export const createRenderer = (
       flashUntil[victim] = t + 1.2;
       flinch[victim] = { until: t + (big ? 1.4 : 0.8), dir: foe.x >= me.x ? 1 : -1 };
       if (ev.stagger) dazedUntil[victim] = t + 7;
-      if (!quiet) freeze = Math.max(freeze, ev.dmg > 300 ? 0.13 : big ? 0.07 : ev.type === 'melee' ? 0.05 : 0);
+      if (!quiet)
+        freeze = Math.max(freeze, ev.type === 'melee' ? (big ? 0.16 : 0.1) : ev.dmg > 300 ? 0.13 : big ? 0.07 : 0);
+      if (ev.type === 'melee') {
+        const words: Record<string, string[]> = {
+          spike: ['CRACK!', 'KRAK!'],
+          thrust: ['SKEWER!', 'WHAM!'],
+          punch: ['POW!', 'BAM!', 'WHAP!'],
+          slash: ['SLASH!', 'SHING!'],
+        };
+        const opts = words[fx] ?? ['POW!'];
+        bursts.push({ x: at.x, y: at.y - 6, t, word: opts[(i + ev.t) % opts.length]!, big });
+        sfx.pow(big);
+        shake = Math.max(shake, big ? 6 : 3);
+      }
       if (ev.blocked) {
         shieldUntil[victim] = t + 2;
         sfx.block();
@@ -958,6 +983,46 @@ export const createRenderer = (
             const k = slotKick[i]![slot] - t;
             return k > 0 ? Math.ceil(Math.min(6, k * 4)) : 0;
           };
+          // melee charge-up (pull back) and strike (thrust forward)
+          let windR = 0;
+          let windL = 0;
+          let crouch = 0;
+          const next = meleeTimes[i]!.find((mt) => mt > t - 1.5);
+          if (next !== undefined) {
+            const slot = meleeSlotAt[`${i}:${next}`];
+            const until = next - t;
+            let off = 0;
+            if (until > 0 && until <= WINDUP) {
+              const k = 1 - until / WINDUP;
+              off = -Math.round(k * 6); // pull back
+              crouch = Math.round(k * 2);
+              const key = `${i}:${next}`;
+              if (!chargeSounded.has(key) && !quiet) {
+                chargeSounded.add(key);
+                sfx.charge();
+              }
+              // energy gathering at the fist
+              if (rng.chance(0.6)) {
+                const fx2 = x + facing[i]! * (SW * 0.35);
+                const fy2 = y + SH * 0.12;
+                const a = rng.next() * 6.283;
+                particles.push({
+                  x: fx2 + Math.cos(a) * 10,
+                  y: fy2 + Math.sin(a) * 10,
+                  vx: -Math.cos(a) * 40,
+                  vy: -Math.sin(a) * 40,
+                  life: 0.25,
+                  max: 0.25,
+                  colors: ['#ffffff', '#ffd23f'],
+                  size: 1,
+                });
+              }
+            } else if (until <= 0 && until > -1.5) {
+              off = Math.round(9 * (1 + until / 1.5)); // thrust out
+            }
+            if (slot === 'weaponL') windL = off;
+            else windR = off;
+          }
           const backK = kickOf('back');
           const rK = kickOf('weaponR');
           const lK = kickOf('weaponL');
@@ -983,9 +1048,14 @@ export const createRenderer = (
               g.drawImage(L.legs, ox + (Math.floor(walked[i]! / 3) % 2), oy);
             } else g.drawImage(L.legs, ox, oy);
           }
-          if (L.armL) g.drawImage(L.armL, ox + lean - lK, oy + torsoBob + aiming);
-          if (L.armR) g.drawImage(L.armR, ox + lean - rK, oy + torsoBob + aiming);
-          if (L.body) g.drawImage(L.body, ox + lean, oy + torsoBob);
+          if (L.armL) g.drawImage(L.armL, ox + lean - lK + windL, oy + torsoBob + aiming + crouch);
+          if (L.armR) g.drawImage(L.armR, ox + lean - rK + windR, oy + torsoBob + aiming + crouch);
+          if (L.body)
+            g.drawImage(
+              L.body,
+              ox + lean + Math.sign(windR + windL) * Math.min(2, Math.abs(windR + windL) / 3),
+              oy + torsoBob + crouch
+            );
         }
         g.restore();
       }
@@ -1209,6 +1279,42 @@ export const createRenderer = (
           g.globalAlpha = 1;
           break;
         }
+        case 'thrust': {
+          if (age > 2) break;
+          const reach = Math.min(1, age * 4);
+          g.globalAlpha = 1 - age / 2;
+          const ex = from.x + (to.x - from.x) * reach;
+          const ey = from.y + (to.y - from.y) * reach;
+          line(from.x, from.y, ex, ey, '#1b1a17', 4);
+          line(from.x, from.y, ex, ey, '#ffffff', 2);
+          // speed lines behind the charge
+          for (let k = 1; k <= 3; k++)
+            line(
+              from.x - ux * (6 + k * 6),
+              from.y - uy * (6 + k * 6) + (k - 2) * 4,
+              from.x - ux * (14 + k * 6),
+              from.y - uy * (14 + k * 6) + (k - 2) * 4,
+              '#ffffff',
+              1
+            );
+          g.globalAlpha = 1;
+          break;
+        }
+        case 'punch': {
+          if (age > 1.2) break;
+          g.globalAlpha = 1 - age / 1.2;
+          for (let k = 1; k <= 3; k++)
+            line(
+              to.x - ux * (8 + k * 5),
+              to.y - uy * (8 + k * 5) + (k - 2) * 5,
+              to.x - ux * (16 + k * 5),
+              to.y - uy * (16 + k * 5) + (k - 2) * 5,
+              '#ffffff',
+              1
+            );
+          g.globalAlpha = 1;
+          break;
+        }
         case 'slash': {
           if (age > 1.8) break;
           const fade = 1 - age / 1.8;
@@ -1291,6 +1397,45 @@ export const createRenderer = (
         g.fillText(txt, Math.round(to.x + jx) + ox, yy + oy);
       g.fillStyle = ev.blocked ? '#3cf0ec' : ev.dmg > 140 ? '#ffc914' : '#ffffff';
       if (a < 0.7 || Math.floor(t * 4) % 2 === 0) g.fillText(txt, Math.round(to.x + jx), yy);
+    }
+
+    // comic impact words + shockwave rings for melee hits
+    for (let k = bursts.length - 1; k >= 0; k--) {
+      const b = bursts[k]!;
+      const age = t - b.t;
+      if (age > 7 || age < 0) {
+        if (age > 7) bursts.splice(k, 1);
+        continue;
+      }
+      const r = Math.round(4 + age * (b.big ? 7 : 5));
+      g.globalAlpha = Math.max(0, 1 - age / 4);
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.ellipse(Math.round(b.x), Math.round(b.y + 10), r, Math.round(r * 0.45), 0, 0, Math.PI * 2);
+      g.stroke();
+      g.globalAlpha = 1;
+      const size = b.big ? 16 : 12;
+      const pop = age < 1 ? 1.25 : 1;
+      g.font = `${Math.round(size * pop)}px Silkscreen, monospace`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      const wy = Math.round(b.y + 4 - Math.min(age, 3) * 2);
+      const wx = Math.round(b.x + 26);
+      if (age < 5 || Math.floor(t * 4) % 2 === 0) {
+        g.fillStyle = '#1b1a17';
+        for (const [ox2, oy2] of [
+          [2, 2],
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [2, 0],
+          [0, 2],
+        ] as const)
+          g.fillText(b.word, wx + ox2, wy + oy2);
+        g.fillStyle = b.big ? '#ff6b4a' : '#ffd23f';
+        g.fillText(b.word, wx, wy);
+      }
     }
 
     // special-move banners

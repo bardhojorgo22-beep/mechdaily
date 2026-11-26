@@ -189,6 +189,21 @@ const HAND_WEAPONS: Record<string, (x: number, c: Ctx) => ReactNode> = {
       <path d={`M${x - 5} 154 L${x + 5} 154 L${x} 182 Z`} fill={c.trim} />
     </g>
   ),
+  'r-lance': (x, c) => (
+    <g {...s}>
+      <rect x={x - 8} y={128} width={16} height={14} rx={3} fill={c.dark} />
+      <path d={`M${x - 9} 140 L${x + 9} 140 L${x + 4} 150 L${x - 4} 150 Z`} fill={c.trim} />
+      <path d={`M${x - 3} 150 L${x + 3} 150 L${x + 1} 206 L${x - 1} 206 Z`} fill="#e8e2d4" />
+      <path d={`M${x - 5} 196 L${x + 5} 196 L${x} 214 Z`} fill={c.trim} />
+    </g>
+  ),
+  'lw-knuckle': (x, c) => (
+    <g {...s}>
+      <rect x={x - 13} y={128} width={26} height={26} rx={6} fill={c.dark} />
+      <rect x={x - 13} y={150} width={26} height={8} rx={3} fill={c.trim} />
+      <path d={`M${x - 6} 132 V144 M${x} 132 V144 M${x + 6} 132 V144`} />
+    </g>
+  ),
   'lw-pistol': (x, c) => (
     <g {...s}>
       <rect x={x - 6} y={132} width={12} height={16} rx={2} fill={c.dark} />

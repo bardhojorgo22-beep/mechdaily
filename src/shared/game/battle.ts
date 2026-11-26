@@ -529,6 +529,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (crit) me.charged = false;
 
         me.cooldown[w] = wp.cooldown;
+        // melee strikes lunge: the attacker jumps forward into the blow
+        const closingSpeed = (me.vx * (foe.x - me.x) + me.vy * (foe.y - me.y)) / Math.max(1, dist);
+        if (wp.type === 'melee') {
+          me.vx += ((foe.x - me.x) / Math.max(1, dist)) * 160;
+          me.vy += ((foe.y - me.y) / Math.max(1, dist)) * 160;
+        }
         me.heat += wp.heat * arena.heatGen;
         me.energy -= wp.energyCost;
         if (ammo !== null && ammo !== undefined) me.ammo[w] = ammo - 1;
@@ -560,8 +566,9 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.86; // braced
           dmg *= me.dmgMult;
           if (crit) dmg *= 3.5;
+          if (wp.charge) dmg *= 1 + Math.max(0, Math.min(1.2, closingSpeed / Math.max(60, me.s.speed)));
           if (active(me, 'berserk')) dmg *= 1.15;
-          if (active(foe, 'turtle')) dmg *= 0.5;
+          if (active(foe, 'turtle')) dmg *= 0.6;
           dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;
           // shields come up more while the holder is charging in

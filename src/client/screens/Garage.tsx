@@ -47,6 +47,7 @@ const partStats = (p: Part): string[] => {
           ...(w.ammo ? [`AMMO ${w.ammo}`] : []),
           ...(w.homing ? ['HOMING'] : []),
           ...(w.heavy ? ['PLANT TO FIRE'] : []),
+          ...(w.charge ? ['CHARGE BONUS'] : []),
         ];
       }
       if ('shield' in p)
