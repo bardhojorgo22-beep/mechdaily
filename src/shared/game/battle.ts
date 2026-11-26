@@ -834,7 +834,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
             staggerFlag = false;
           }
           // knockback: big, slow hits shove the target; heavy mechs barely budge
-          const kb = { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
+          // rails punch through rather than shove: low knockback so they can't juggle
+          const kb = wp.partId === 'r-rail' ? 0.2 : { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
           const push = Math.min(170, (dmg * kb * 18) / Math.max(30, foe.s.weight));
           const d = dist || 1;
           // on-hit synergy effects
@@ -890,7 +891,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         t.ob = false;
         t.vx *= 0.3;
         t.vy *= 0.3;
-        t.staggerImmune = tick + p.stagger + 18;
+        t.staggerImmune = tick + p.stagger + 40; // no stagger-locking
       }
       if (!active(t, 'turtle')) {
         t.vx += p.kx;
