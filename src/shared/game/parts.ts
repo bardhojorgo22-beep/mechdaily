@@ -565,13 +565,13 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'energy',
-      damage: 592,
+      damage: 716,
       minRange: 255,
       maxRange: 1615,
-      cooldown: 61,
+      cooldown: 55,
       heat: 42,
       energyCost: 112,
-      accuracy: 0.72,
+      accuracy: 0.8,
       ammo: null,
       heavy: true,
     }),
@@ -604,7 +604,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'melee',
-      damage: 594,
+      damage: 558,
       minRange: 0,
       maxRange: 119,
       cooldown: 35,
@@ -663,7 +663,7 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'energy',
-      damage: 49,
+      damage: 44,
       minRange: 0,
       maxRange: 255,
       cooldown: 3,
@@ -699,7 +699,7 @@ export const PARTS: Part[] = [
     blurb: 'A shield made of an actual door.',
     weight: 9,
     drain: 1,
-    shield: { block: 0.45, energyPerHit: 0 },
+    shield: { block: 0.52, energyPerHit: 0 },
   },
   {
     id: 'lw-aegis',
@@ -708,7 +708,7 @@ export const PARTS: Part[] = [
     blurb: 'Energy shield. Blocks a lot, costs a lot.',
     weight: 4,
     drain: 4,
-    shield: { block: 0.7, energyPerHit: 14 },
+    shield: { block: 0.7, energyPerHit: 9 },
   },
 
   // ── Back units ───────────────────────────────────────

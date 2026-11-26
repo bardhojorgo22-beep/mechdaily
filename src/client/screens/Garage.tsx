@@ -11,6 +11,7 @@ import {
 } from '../../shared/game/mech';
 import { SLOTS, SLOT_SHORT, getPart, partsForSlot, type Part, type Slot } from '../../shared/game/parts';
 import { SPECIALS } from '../../shared/game/battle';
+import { fightingStyle } from '../../shared/game/style';
 import { PixelMech } from '../components/PixelMech';
 import { sfx } from '../lib/sfx';
 
@@ -108,6 +109,7 @@ type Props = {
 export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
   const [tab, setTab] = useState<Tab>('weaponR');
   const st = useMemo(() => computeStats(build, arena, tax), [build, arena, tax]);
+  const style = fightingStyle(st);
   const set = (slot: Slot, id: string) => {
     if (build.parts[slot] !== id) sfx.equip();
     onChange({ ...build, parts: { ...build.parts, [slot]: id } });
@@ -154,6 +156,11 @@ export const Garage = ({ build, arena, tax, onChange, onBack }: Props) => {
           />
           <Bar label="COOLING" value={Math.max(0, st.cooling)} max={80} text={`${Math.round(st.cooling)}/s`} />
         </div>
+      </div>
+
+      <div className="sticker p-2 flex items-center gap-2" style={{ background: '#1b1a17', color: '#efe8da' }}>
+        <span className="tag bg-sun text-ink">{style.name}</span>
+        <span className="text-[11px]">{style.plan}</span>
       </div>
 
       {(st.overweight > 0 || st.energyRegen <= 0) && (

@@ -94,9 +94,12 @@ type MechState = {
   charged: boolean; // sniper: next long-range shot is charged
   dmgMult: number;
   moveFrac: number; // current speed / top speed, drives evasion
+  want: number;
+  wantUntil: number;
   qbCd: number; // ticks until next quick boost
   qbUntil: number; // dodge window from a quick boost
   ob: boolean; // overboosting
+  obReady: number; // tick when overboost can fire again
   threat: number; // tick when a big enemy shot was telegraphed
 };
 
@@ -122,9 +125,12 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   charged: false,
   dmgMult: 1,
   moveFrac: 0,
+  want: 400,
+  wantUntil: 0,
   qbCd: 10 + seedOffset * 5,
   qbUntil: 0,
   ob: false,
+  obReady: 30,
   threat: -99,
 });
 
@@ -138,56 +144,69 @@ const usable = (m: MechState, i: number) => {
 };
 
 /** The distance this pilot wants to fight at. */
-const desiredRange = (m: MechState, arena: Arena, tick: number, idx: number): number => {
-  const ranged: { min: number; max: number; dps: number }[] = [];
-  let meleeIdx = -1;
-  let meleeDps = 0;
-  m.s.weapons.forEach((wp, i) => {
-    if (!usable(m, i)) return;
-    if (wp.type === 'melee') {
-      meleeIdx = i;
-      meleeDps = wp.damage / wp.cooldown;
-      return;
-    }
-    ranged.push({ min: wp.minRange, max: reach(m, wp, arena), dps: wp.damage / wp.cooldown });
+/** Expected damage per second `a` deals to `b` at distance d (rough, for pilot decisions). */
+const dpsAt = (a: MechState, b: MechState, d: number, arena: Arena): number => {
+  let total = 0;
+  a.s.weapons.forEach((wp, i) => {
+    if (!usable(a, i)) return;
+    if (d < wp.minRange || d > reach(a, wp, arena)) return;
+    const perSec = (wp.damage * DAMAGE_SCALE) / (wp.cooldown / TICKS_PER_SECOND);
+    const acc = wp.accuracy * a.s.accuracy * (1 - 0.25 * (d / wp.maxRange));
+    const ev = b.s.evasion * 0.75 * (0.5 + 0.5 * (d / wp.maxRange)) * (wp.homing ? 0.6 : 1);
+    const hit = clamp(acc * (1 - ev), 0.05, 0.97);
+    total += perSec * hit * (1 - armorAgainst(b.s, wp.type));
   });
-  // Melee pilots blade-run: lunge in when the blade is ready, back off while it recharges.
-  const bestRangedDps = Math.max(0, ...ranged.map((r) => r.dps));
-  const lunger =
-    m.s.behavior === 'rush' || m.s.behavior === 'berserk' || m.s.behavior === 'flank' || meleeDps > bestRangedDps * 1.3;
-  if (meleeIdx >= 0 && lunger && m.cooldown[meleeIdx]! <= 4) return 60;
-  if (ranged.length === 0) return 60;
+  return total;
+};
 
-  // Fight at the main (highest damage) weapon's sweet spot, not the shortest gun's.
-  const main = ranged.reduce((a, b) => (b.dps > a.dps ? b : a));
-  const longest = Math.max(...ranged.map((r) => r.max));
-  const minNeeded = Math.max(...ranged.map((r) => r.min));
-  const sweet = Math.max(main.min + 40, main.max * 0.68);
+/**
+ * The distance this pilot wants to fight at, against this particular enemy.
+ * Every candidate distance is scored by how fast I'd kill them there minus how
+ * fast they'd kill me (using current HP, so hurt pilots get careful). The
+ * pilot chip is personality: which of the good distances it prefers.
+ */
+const desiredRange = (m: MechState, foe: MechState, arena: Arena, tick: number, idx: number): number => {
+  if (tick < m.wantUntil) return m.want;
+  const maxD = Math.min(1500, Math.sqrt(arena.width * arena.width + arena.height * arena.height) * 0.8);
+  const myHp = Math.max(1, m.hp);
+  const foeHp = Math.max(1, foe.hp);
+  const cands: { d: number; score: number }[] = [];
+  for (let d = 60; d <= maxD; d += 40) {
+    const mine = dpsAt(m, foe, d, arena) / foeHp;
+    const theirs = dpsAt(foe, m, d, arena) / myHp;
+    cands.push({ d, score: mine - theirs * 0.9 });
+  }
+  const best = cands.reduce((a, b) => (b.score > a.score ? b : a));
+  // "good enough" distances: within reach of the best score
+  const slack = Math.abs(best.score) * 0.15 + 0.0005;
+  const good = cands.filter((c) => c.score >= best.score - slack);
   let want: number;
   switch (m.s.behavior) {
     case 'rush':
-      want = Math.min(main.max * 0.85, Math.max(260, sweet * 0.6));
-      break;
     case 'berserk':
-      want = Math.min(main.max * 0.85, Math.max(230, sweet * 0.55));
+      want = Math.min(...good.map((c) => c.d));
       break;
     case 'kite':
-      want = Math.max(longest * 0.85, minNeeded + 40);
-      break;
     case 'sniper':
-      want = Math.max(longest * 0.92, minNeeded + 40);
+      want = Math.max(...good.map((c) => c.d));
       break;
-    case 'turtle':
-      want = sweet * 0.95;
-      break;
-    case 'flank':
-      want = sweet * 0.8;
-      break;
+    default:
+      want = best.d;
   }
-  // Ebb and flow: the preferred distance breathes in and out over ~8s.
-  const phase = ((tick + idx * 37) % 80) / 40 - 1; // -1..1 triangle-ish
-  const breathe = 1 + 0.18 * (Math.abs(phase) * 2 - 1);
-  return Math.max(200, Math.min(main.max * 0.95, want * breathe));
+  // Hybrid blade builds hit-and-run: lunge when the blade is ready, back off while it recharges.
+  const melee = m.s.weapons.findIndex((wp, i) => wp.type === 'melee' && usable(m, i));
+  if (melee >= 0 && want < 160) {
+    const rangedHelp = dpsAt(m, foe, 300, arena);
+    const bladeReady = m.cooldown[melee]! <= 4;
+    if (!bladeReady && rangedHelp > 0) want = 300;
+    else want = 50;
+  }
+  // a little ebb and flow so fights don't lock into one spot
+  const phase = ((tick + idx * 37) % 80) / 40 - 1;
+  want *= 1 + 0.08 * (Math.abs(phase) * 2 - 1);
+  m.want = want;
+  m.wantUntil = tick + 5;
+  return want;
 };
 
 const armorAgainst = (target: MechStats, type: MountedWeapon['type']) => {
@@ -272,7 +291,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const ux = dx / dist;
       const uy = dy / dist;
-      const want = desiredRange(me, arena, tick, i);
+      const want = desiredRange(me, foe, arena, tick, i);
       const band = 30;
 
       // ── pilot chip special: once per fight ──
@@ -326,11 +345,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
 
       // overboost: long, fast, straight charge when way out of range
       const holdsGround = me.s.behavior === 'turtle' || me.s.behavior === 'sniper';
-      if (!me.ob && !holdsGround && dist > want * 1.6 + 150 && me.energy > me.s.energyCap * 0.5) {
+      if (!me.ob && !holdsGround && tick >= me.obReady && dist > want * 1.6 + 150 && me.energy > me.s.energyCap * 0.5) {
         me.ob = true;
         moves.push({ t: tick, by, kind: 'ob', dx: ux, dy: uy });
       }
-      if (me.ob && (dist < want * 1.15 + 40 || me.energy < me.s.energyCap * 0.12)) me.ob = false;
+      if (me.ob && (dist < want * 1.15 + 40 || me.energy < me.s.energyCap * 0.12)) {
+        me.ob = false;
+        me.obReady = tick + 120; // ~12s before the next one
+      }
 
       let tvx = 0;
       let tvy = 0;
@@ -339,8 +361,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       } else if (turtleLock) {
         // dug in
       } else if (me.ob) {
-        tvx = ux * speed * 2.1;
-        tvy = uy * speed * 2.1;
+        tvx = ux * speed * 1.8;
+        tvy = uy * speed * 1.8;
         me.energy -= me.s.boostDrain * 1.8 * DT;
       } else {
         const radial = clamp((dist - want) / 140, -1, 1);
@@ -359,6 +381,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         }
         const nearWall = me.x < 120 || me.x > W - 120 || me.y < 90 || me.y > H - 90;
         if (radial < 0 && nearWall) orbit = Math.max(orbit, 0.95);
+        else if (radial < -0.3) orbit = Math.max(orbit, 0.8); // kite in an arc, not a straight line
         let mx = ux * radial + tx * orbit;
         let my = uy * radial + ty * orbit;
         const mag = Math.sqrt(mx * mx + my * my);
@@ -514,7 +537,9 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (active(foe, 'turtle')) dmg *= 0.5;
           dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;
-          if (sh && rng.chance(0.6)) {
+          // shields come up more while the holder is charging in
+          const closing = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.3;
+          if (sh && rng.chance(closing ? 0.75 : 0.6)) {
             const canAfford = foe.energy >= sh.energyPerHit;
             if (canAfford) {
               foe.energy -= sh.energyPerHit;
