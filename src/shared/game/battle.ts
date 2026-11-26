@@ -20,6 +20,7 @@ export type ShotEvent = {
   crit?: boolean; // charged sniper shot
   dodged?: boolean; // missed because the target was mid quick-boost
   stagger?: boolean; // a big ranged hit stopped a charging target in its tracks
+  ram?: boolean; // Velocity: a full-speed crash, not a weapon
 };
 
 /** Once-per-fight pilot chip special moves. */
@@ -47,6 +48,11 @@ export const SPECIALS: Record<MechStats['behavior'], { name: string; blurb: stri
   flank: {
     name: 'Afterburner',
     blurb: 'Below 80% HP: 3.6s sprint around the enemy, very hard to hit, +20% damage.',
+  },
+  velocity: {
+    name: 'Terminal Velocity',
+    blurb:
+      'Momentum builds while you move and drains when you get hit: more speed, dodge and fire rate. At full momentum: a crash ram that staggers, then you start slow again.',
   },
   redshift: {
     name: 'Redshift',
@@ -122,6 +128,8 @@ type MechState = {
   staggerImmune: number; // tick until which this mech can't be staggered again
   threat: number; // tick when a big enemy shot was telegraphed
   lastStand: number; // tick the armor was purged, -1 = not yet
+  momentum: number; // Velocity chip, 0..1
+  ramUntil: number; // Velocity ram in progress
 };
 
 const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechState => ({
@@ -155,6 +163,8 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   staggerImmune: 0,
   threat: -99,
   lastStand: -1,
+  momentum: 0,
+  ramUntil: 0,
 });
 
 const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
@@ -278,6 +288,7 @@ const ORBIT: Record<MechStats['behavior'], number> = {
   berserk: 0.35,
   flank: 0.95,
   redshift: 0.7,
+  velocity: 0.85,
 };
 
 export type Fighter = {
@@ -404,6 +415,17 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       if (active(me, 'flank')) speed = me.s.speed * 1.6;
       if (active(me, 'redshift')) speed = me.s.speed * 2;
       if (stripped(me)) speed *= 1.2; // nothing left to carry
+      if (me.s.behavior === 'velocity') {
+        // momentum: crawl at first, build up while moving, ram at full speed
+        if (me.moving && tick >= me.ramUntil) me.momentum = Math.min(1, me.momentum + DT / 6);
+        speed *= 0.7 + 0.55 * me.momentum;
+        if (me.momentum >= 1 && tick >= me.ramUntil && dist < 750 && dist > 90) {
+          me.ramUntil = tick + 14;
+          me.momentum = 0;
+          specials.push({ t: tick, by: i === 0 ? 0 : 1, kind: 'velocity', until: tick + 14 });
+        }
+      }
+      const ramming = tick < me.ramUntil;
       const turtleLock = active(me, 'turtle');
       const sniperSet = me.s.behavior === 'sniper' && Math.abs(dist - want) < band * 2;
 
@@ -424,6 +446,10 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         me.planted--;
       } else if (turtleLock) {
         // dug in
+      } else if (ramming) {
+        const rs = Math.max(me.s.speed, 90) * 2.4;
+        tvx = ux * rs;
+        tvy = uy * rs;
       } else if (me.ob) {
         tvx = ux * speed * 1.8;
         tvy = uy * speed * 1.8;
@@ -587,6 +613,30 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const dx = foe.x - me.x;
       const dy = foe.y - me.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      // Velocity ram connects: a crash, not a weapon
+      if (tick < me.ramUntil && dist < 90) {
+        me.ramUntil = tick;
+        let dmg = (foe.s.hp * 0.035 + me.s.weight * 4) * me.dmgMult;
+        if (invuln(foe)) dmg = 0;
+        const d = dist || 1;
+        const shove = 220 / (1 + foe.s.weight / 100);
+        const stag = active(foe, 'turtle') ? 0 : 7;
+        pending.push({ target: i === 0 ? 1 : 0, dmg, kx: (dx / d) * shove, ky: (dy / d) * shove, stagger: stag });
+        me.vx *= 0.1;
+        me.vy *= 0.1;
+        me.dealt += dmg;
+        events.push({
+          t: tick,
+          by: i === 0 ? 0 : 1,
+          slot: 'weaponR',
+          type: 'melee',
+          hit: true,
+          dmg: Math.round(dmg),
+          blocked: false,
+          ram: true,
+          ...(stag ? { stagger: true } : {}),
+        });
+      }
       const longest = me.s.weapons.reduce(
         (best, wp, w) => (wp.maxRange > (me.s.weapons[best]?.maxRange ?? 0) ? w : best),
         0
@@ -596,7 +646,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           me.cooldown[w]! -
           (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1) -
           (active(me, 'redshift') ? 1 : 0) -
-          (stripped(me) && tick % 2 === 0 ? 1 : 0);
+          (stripped(me) && tick % 2 === 0 ? 1 : 0) -
+          (me.s.behavior === 'velocity' && me.momentum > 0.6 && tick % 3 === 0 ? 1 : 0);
         const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
         if (big && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
         if (me.cooldown[w]! > 0) return;
@@ -635,6 +686,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (active(foe, 'flank')) ev += 0.5;
         if (active(foe, 'redshift')) ev += 0.5;
         if (stripped(foe)) ev += 0.1;
+        if (foe.s.behavior === 'velocity') ev += 0.08 * foe.momentum;
         if (active(me, 'redshift')) acc *= 1.15;
         if (foe.qbUntil > tick) ev += 0.3;
         if (wp.homing) ev *= 0.6;
@@ -657,7 +709,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (tick > OVERTIME_TICK) dmg *= 1 + (tick - OVERTIME_TICK) / 150; // sudden death
           if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.25, (me.heat - 100) / 200);
           if (active(foe, 'turtle')) dmg *= 0.6;
-          if (!stripped(foe)) dmg *= 1 - armorAgainst(foe.s, wp.type);
+          if (!stripped(foe) && !wp.pierce) dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;
           // shields come up more while the holder is charging in
           const closing = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.3;
@@ -717,6 +769,8 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const t = mechs[p.target]!;
       if (invuln(t)) continue;
       t.hp -= p.dmg;
+      if (t.s.behavior === 'velocity' && p.dmg > 0)
+        t.momentum = Math.max(0, t.momentum - 0.06 - (p.dmg / t.s.hp) * 1.2);
       if (p.stagger > 0) {
         t.planted = Math.max(t.planted, p.stagger);
         t.ob = false;

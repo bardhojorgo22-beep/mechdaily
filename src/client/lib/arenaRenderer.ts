@@ -72,6 +72,8 @@ export const THEMES: Record<string, Theme> = {
 type Fx =
   | 'tracer'
   | 'pistol'
+  | 'arrow'
+  | 'ram'
   | 'bullet'
   | 'pellets'
   | 'beam'
@@ -89,6 +91,7 @@ type Fx =
 const FX_BY_PART: Record<string, Fx> = {
   'r-rifle': 'tracer',
   'lw-pistol': 'pistol',
+  'r-bow': 'arrow',
   'r-buzz': 'bullet',
   'r-scatter': 'pellets',
   'r-beam': 'beam',
@@ -127,6 +130,8 @@ const flightOf = (fx: Fx, dist: number): number => {
       return Math.max(5, dist / 22);
     case 'flame':
       return 2;
+    case 'arrow':
+      return Math.max(1.5, dist / 55);
     default:
       return 0;
   }
@@ -449,7 +454,7 @@ export const createRenderer = (
   const dazedUntil = [0, 0];
   // melee strikes per mech, for the charge-up telegraph
   const meleeTimes: number[][] = [[], []];
-  for (const ev of result.events) if (ev.type === 'melee') meleeTimes[ev.by]!.push(ev.t);
+  for (const ev of result.events) if (ev.type === 'melee' && !ev.ram) meleeTimes[ev.by]!.push(ev.t);
   const meleeSlotAt: Record<string, ShotEvent['slot']> = {};
   for (const ev of result.events) if (ev.type === 'melee') meleeSlotAt[`${ev.by}:${ev.t}`] = ev.slot;
   const chargeSounded = new Set<string>();
@@ -462,10 +467,15 @@ export const createRenderer = (
   };
   // rail shots telegraph with a charge glow; drones orbit their owner all fight
   const railTimes: number[][] = [[], []];
+  const bowTimes: number[][] = [[], []];
+  const bowSounded = new Set<string>();
+  const stuck: { by: number; dx: number; dy: number; until: number; dir: number }[][] = [[], []]; // arrows stuck in a mech
+  const isVelocity = builds.map((b) => b.parts.chip === 'p-velocity');
   const firstFire = new Map<string, number>(); // `${side}:${slot}` -> tick it first fired
   for (const ev of result.events) {
     const pid = builds[ev.by].parts[ev.slot];
-    if (pid === 'r-rail') railTimes[ev.by]!.push(ev.t);
+    if (pid === 'r-rail' && !ev.ram) railTimes[ev.by]!.push(ev.t);
+    if (pid === 'r-bow' && !ev.ram) bowTimes[ev.by]!.push(ev.t);
     const k = `${ev.by}:${ev.slot}`;
     if (!firstFire.has(k)) firstFire.set(k, ev.t);
   }
@@ -517,7 +527,8 @@ export const createRenderer = (
     return p.slot === 'legs' ? p.legType : 'biped';
   });
 
-  const fxOf = (ev: ShotEvent): Fx => FX_BY_PART[builds[ev.by].parts[ev.slot]] ?? FALLBACK[ev.type];
+  const fxOf = (ev: ShotEvent): Fx =>
+    ev.ram ? 'ram' : (FX_BY_PART[builds[ev.by].parts[ev.slot]] ?? FALLBACK[ev.type]);
   const gun = (p: { x: number; y: number }, o: { x: number; y: number }, slot: ShotEvent['slot']) => {
     const dir = o.x < p.x ? -1 : 1;
     if (slot === 'back') return { x: p.x - dir * 6, y: p.y - SPRITE_H * 0.32 };
@@ -839,6 +850,7 @@ export const createRenderer = (
         freeze = Math.max(freeze, ev.type === 'melee' ? (big ? 0.16 : 0.1) : ev.dmg > 300 ? 0.13 : big ? 0.07 : 0);
       if (ev.type === 'melee') {
         const words: Record<string, string[]> = {
+          ram: ['CRASH!', 'WHAM!', 'IMPACT!'],
           spike: ['CRACK!', 'KA-CHUNK!'],
           thrust: ['SKEWER!', 'IMPALE!'],
           punch: big ? ['POW!', 'HAYMAKER!'] : ['JAB!', 'JAB!'],
@@ -848,7 +860,7 @@ export const createRenderer = (
         let word = opts[(i + ev.t) % opts.length]!;
         if (fx === 'punch' && !big && ev.t - lastPunch[ev.by]! < 25) word = '1-2!';
         if (fx === 'punch') lastPunch[ev.by] = ev.t;
-        bursts.push({ x: at.x, y: at.y - 6, t, word, big: big || fx === 'spike' });
+        bursts.push({ x: at.x, y: at.y - 6, t, word, big: big || fx === 'spike' || fx === 'ram' });
         sfx.pow(big);
         shake = Math.max(shake, big ? 6 : 3);
       }
@@ -907,6 +919,27 @@ export const createRenderer = (
               0.25,
               1
             );
+          break;
+        case 'arrow': {
+          // the arrow punches through and stays stuck in the armor
+          spawn(at.x, at.y, 6, ['#ffffff', '#e8e2d4', '#c9c4b8'], 30, 0.25, 1, foe.x > me.x ? 0.6 : -0.6, 0, 0.5);
+          const list = stuck[victim]!;
+          list.push({
+            by: ev.by,
+            dx: (rng.next() - 0.5) * 12,
+            dy: (rng.next() - 0.6) * 14,
+            until: t + 40,
+            dir: foe.x > me.x ? 1 : -1,
+          });
+          if (list.length > 6) list.shift();
+          bursts.push({ x: at.x, y: at.y - 6, t, word: 'PIERCE!', big: false });
+          break;
+        }
+        case 'ram':
+          spawn(at.x, at.y, 30, ['#ffffff', '#fff3b0', '#ffd23f', '#ff7a2f'], 80, 0.5, 2);
+          spawn(at.x, at.y + 8, 12, [theme.speck, theme.dark], 40, 0.8, 3, 0, -0.3, 1, 1);
+          shake = 8;
+          flash = Math.max(flash, 0.15);
           break;
         case 'punch':
           spawn(
@@ -1079,7 +1112,7 @@ export const createRenderer = (
       const sp = sprites.current[i];
       const act = specialActive(i);
       // afterimages while dashing
-      if ((act && (act.kind === 'rush' || act.kind === 'flank')) || t < qbUntil[i]!) {
+      if ((act && (act.kind === 'rush' || act.kind === 'flank' || act.kind === 'velocity')) || t < qbUntil[i]!) {
         const tr = trail[i]!;
         tr.unshift({ x, y: y + bobY });
         if (tr.length > 6) tr.pop();
@@ -1286,6 +1319,49 @@ export const createRenderer = (
             sfx.railCharge();
           }
         }
+        // gearbow: string draws back before the shot
+        const bow = bowTimes[i]!.find((bt) => bt > t && bt - t <= 7);
+        if (bow !== undefined) {
+          const gp = gun({ x, y }, pos[1 - i]!, 'weaponR');
+          const k = 1 - (bow - t) / 7;
+          const pull = Math.round(2 + k * 6);
+          const bx = Math.round(gp.x - facing[i]! * pull);
+          line(gp.x, gp.y - 7, bx, gp.y, '#f8f4ec');
+          line(gp.x, gp.y + 7, bx, gp.y, '#f8f4ec');
+          g.fillStyle = '#5b4636';
+          g.fillRect(Math.min(bx, bx + facing[i]! * 10), Math.round(gp.y), 10, 1);
+          const key = `${i}:${bow}`;
+          if (!bowSounded.has(key) && !quiet) {
+            bowSounded.add(key);
+            sfx.bowDraw();
+          }
+        }
+        // arrows stuck in this mech
+        for (const a of stuck[i]!) {
+          if (t > a.until) continue;
+          const sx = Math.round(x + a.dx);
+          const sy = Math.round(y + a.dy);
+          line(sx, sy, sx - a.dir * 7, sy - 2, '#5b4636');
+          g.fillStyle = '#e4572e';
+          g.fillRect(sx - a.dir * 7, sy - 3, 2, 2);
+        }
+        // velocity: speed streaks as momentum builds
+        if (isVelocity[i] && vel[i]!.ratio > 0.85 && rng.chance(0.6)) {
+          const v = vel[i]!;
+          const mag = Math.hypot(v.x, v.y) || 1;
+          spawn(
+            x - (v.x / mag) * SW * 0.5,
+            y + (rng.next() - 0.5) * SH * 0.6,
+            1,
+            ['#ffffff', '#ffd23f'],
+            30,
+            0.25,
+            1,
+            -v.x / mag,
+            -v.y / mag,
+            0.1
+          );
+        }
         // orbit drone: always circling its owner
         if (hasDrone[i]) {
           const dp = dronePos(i, pos[i]!, t);
@@ -1483,6 +1559,18 @@ export const createRenderer = (
           line(p.x - ux * 7, p.y - uy * 7, p.x, p.y, '#ffd23f');
           g.fillStyle = '#ffffff';
           g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+          break;
+        }
+        case 'arrow': {
+          if (age > flight) break;
+          const p = at(age / flight);
+          line(p.x - ux * 10, p.y - uy * 10, p.x, p.y, '#5b4636');
+          g.fillStyle = '#e8e2d4';
+          g.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 1, 2, 2); // steel tip
+          // fletching
+          g.fillStyle = '#e4572e';
+          g.fillRect(Math.round(p.x - ux * 10 - uy * 2), Math.round(p.y - uy * 10 + ux * 2), 2, 1);
+          g.fillRect(Math.round(p.x - ux * 10 + uy * 2), Math.round(p.y - uy * 10 - ux * 2), 2, 1);
           break;
         }
         case 'pistol': {

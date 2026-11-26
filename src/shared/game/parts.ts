@@ -44,7 +44,7 @@ export const SLOT_SHORT: Record<Slot, string> = {
 
 export type DamageType = 'kinetic' | 'energy' | 'explosive' | 'melee';
 export type LegType = 'biped' | 'reverse' | 'quad' | 'tank' | 'hover';
-export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank' | 'redshift';
+export type Behavior = 'rush' | 'kite' | 'turtle' | 'sniper' | 'berserk' | 'flank' | 'redshift' | 'velocity';
 
 export type Weapon = {
   type: DamageType;
@@ -59,6 +59,7 @@ export type Weapon = {
   homing?: boolean;
   heavy?: boolean; // non-tank legs must plant to fire
   charge?: boolean; // melee: hits harder the faster you're closing in
+  pierce?: boolean; // ignores armor
 };
 
 type PartBase = {
@@ -231,10 +232,10 @@ export const PARTS: Part[] = [
     blurb: 'A bank safe with opinions.',
     weight: 30,
     drain: 6,
-    hp: 1749,
+    hp: 1640,
     armorK: 0.35,
     armorE: 0.16,
-    cooling: 16,
+    cooling: 13,
     load: 15,
   },
   {
@@ -521,6 +522,26 @@ export const PARTS: Part[] = [
     }),
   },
   {
+    id: 'r-bow',
+    slot: 'weaponR',
+    name: 'Gearbow',
+    blurb: 'Mechanical bow. Slow draw, arrows punch straight through armor.',
+    weight: 7,
+    drain: 0,
+    weapon: w({
+      type: 'kinetic',
+      damage: 165,
+      minRange: 120,
+      maxRange: 1300,
+      cooldown: 28,
+      heat: 5,
+      energyCost: 0,
+      accuracy: 0.78,
+      ammo: 34,
+      pierce: true,
+    }),
+  },
+  {
     id: 'r-scatter',
     slot: 'weaponR',
     name: 'Scatter',
@@ -685,10 +706,10 @@ export const PARTS: Part[] = [
     drain: 0,
     weapon: w({
       type: 'melee',
-      damage: 170,
+      damage: 180,
       minRange: 0,
       maxRange: 110,
-      cooldown: 11,
+      cooldown: 10,
       heat: 8,
       energyCost: 0,
       accuracy: 0.9,
@@ -919,6 +940,15 @@ export const PARTS: Part[] = [
     name: 'Redshift',
     behavior: 'redshift',
     blurb: 'Overclocks the pilot. Burns hot after.',
+    weight: 0,
+    drain: 0,
+  },
+  {
+    id: 'p-velocity',
+    slot: 'chip',
+    name: 'Velocity',
+    behavior: 'velocity',
+    blurb: 'Starts slow, builds momentum. Getting hit bleeds it. At full speed: ram.',
     weight: 0,
     drain: 0,
   },

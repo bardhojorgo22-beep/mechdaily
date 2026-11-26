@@ -163,6 +163,15 @@ export const sfx = {
         noise(0.06, 0.28, 3200 * p);
         tone(260 * p, 90, 0.06, 'square', 0.08);
         break;
+      case 'arrow': // thwip + twang
+        if (!throttle(key, 150)) return;
+        noise(0.08, 0.3, 6000);
+        tone(180 * p, 150, 0.25, 'triangle', 0.12);
+        break;
+      case 'ram': // big crash
+        noise(0.6, 0.6, 1100);
+        tone(70, 25, 0.5, 'square', 0.3);
+        break;
       case 'pistol': // pew-pew
         if (!throttle(key, 120)) return;
         tone(1300 * p, 500, 0.05, 'square', 0.07);
@@ -235,6 +244,7 @@ export const sfx = {
         noise(0.06, 0.25, 3000);
     }
   },
+  bowDraw: () => tone(90, 160, 0.35, 'sawtooth', 0.03),
   railCharge: () => tone(300, 2400, 0.45, 'sine', 0.06),
   pileCharge: () => {
     noise(0.6, 0.1, 9000);

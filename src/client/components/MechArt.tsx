@@ -157,6 +157,15 @@ const HAND_WEAPONS: Record<string, (x: number, c: Ctx) => ReactNode> = {
       <rect x={x - 3} y={150} width={6} height={36} fill={INK} />
     </g>
   ),
+  'r-bow': (x, c) => (
+    <g {...s}>
+      <rect x={x - 6} y={128} width={12} height={16} rx={3} fill={c.dark} />
+      <path d={`M${x - 4} 138 Q${x - 26} 172 ${x - 4} 206`} fill="none" strokeWidth={5} />
+      <path d={`M${x - 4} 138 Q${x - 26} 172 ${x - 4} 206`} fill="none" stroke={c.trim} strokeWidth={2} />
+      <line x1={x - 4} y1={138} x2={x - 4} y2={206} strokeWidth={1} />
+      <circle cx={x - 15} cy={172} r={4} fill={c.trim} />
+    </g>
+  ),
   'r-scatter': (x, c) => (
     <g {...s}>
       <rect x={x - 10} y={130} width={20} height={30} rx={3} fill={c.dark} />
