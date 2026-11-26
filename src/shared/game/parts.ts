@@ -771,7 +771,7 @@ export const PARTS: Part[] = [
     blurb: 'Radar. Better aim, longer reach.',
     weight: 5,
     drain: 4,
-    utility: { sensor: 900, accuracy: 0.14, range: 0.15 },
+    utility: { sensor: 900, accuracy: 0.19, range: 0.18 },
   },
   {
     id: 'bk-chaff',
@@ -780,7 +780,7 @@ export const PARTS: Part[] = [
     blurb: 'Jammer. Enemy aim gets worse.',
     weight: 4,
     drain: 5,
-    utility: { jam: 0.17 },
+    utility: { jam: 0.22 },
   },
   {
     id: 'bk-fins',
@@ -789,7 +789,7 @@ export const PARTS: Part[] = [
     blurb: 'Extra cooling. Spam freely.',
     weight: 4,
     drain: 1,
-    utility: { cooling: 34, hp: 150 },
+    utility: { cooling: 40, hp: 320 },
   },
 
   // ── Pilot chips ──────────────────────────────────────

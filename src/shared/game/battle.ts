@@ -81,11 +81,14 @@ type MechState = {
   cooldown: number[];
   ammo: (number | null)[];
   strafeSign: number;
+  vx: number; // velocity, m/s
+  vy: number;
   dealt: number;
   specialUsed: boolean;
   specialUntil: number;
   charged: boolean; // sniper: next long-range shot is charged
   dmgMult: number;
+  moveFrac: number; // current speed / top speed, drives evasion
 };
 
 const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechState => ({
@@ -102,11 +105,14 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   cooldown: s.weapons.map((_, i) => 3 + i * 2 + seedOffset),
   ammo: s.weapons.map((wp) => wp.ammo),
   strafeSign: seedOffset % 2 === 0 ? 1 : -1,
+  vx: 0,
+  vy: 0,
   dealt: 0,
   specialUsed: false,
   specialUntil: 0,
   charged: false,
   dmgMult: 1,
+  moveFrac: 0,
 });
 
 const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
@@ -265,7 +271,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       else if (me.s.behavior === 'flank') strafe = 0.85;
       else if (me.s.behavior === 'kite') strafe = 0.4;
       else if (me.s.behavior === 'rush' || me.s.behavior === 'berserk') strafe = 0.12;
-      if (tick % 45 === 0 && rng.chance(0.5)) me.strafeSign *= -1;
+      if (me.s.behavior === 'flank' && tick % 70 === 0) me.strafeSign *= -1;
 
       // Backed into a wall? Slide along it instead of getting pinned.
       const nearWall = me.x < 90 || me.x > W - 90 || me.y < 70 || me.y > H - 70;
@@ -285,8 +291,12 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
 
       const sniperSet = me.s.behavior === 'sniper' && radial >= 0 && dist <= want + band;
       const turtleSet = (me.s.behavior === 'turtle' && radial <= 0) || active(me, 'turtle');
+      // Heavy movement: mechs accelerate toward where they want to go and
+      // skid to a stop. Heavier mechs take longer to get going and to turn.
+      let tvx = 0;
+      let tvy = 0;
+      let topSpeed = me.s.speed;
       if (me.planted > 0 || sniperSet || turtleSet || mag < 0.001) {
-        me.moving = false;
         if (me.planted > 0) me.planted--;
       } else {
         mx /= mag;
@@ -299,10 +309,30 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         }
         if (active(me, 'rush')) speed = me.s.speed * 1.8;
         if (active(me, 'flank')) speed = me.s.speed * 1.6;
-        me.x = clamp(me.x + mx * speed * DT, 20, W - 20);
-        me.y = clamp(me.y + my * speed * DT, 20, H - 20);
-        me.moving = true;
+        topSpeed = Math.max(topSpeed, speed);
+        tvx = mx * speed;
+        tvy = my * speed;
       }
+      const timeToTop = 0.15 + me.s.weight / 150; // seconds
+      const accel = (Math.max(topSpeed, 60) / timeToTop) * DT;
+      let dvx = tvx - me.vx;
+      let dvy = tvy - me.vy;
+      const dv = Math.sqrt(dvx * dvx + dvy * dvy);
+      if (dv > accel) {
+        dvx = (dvx / dv) * accel;
+        dvy = (dvy / dv) * accel;
+      }
+      me.vx += dvx;
+      me.vy += dvy;
+      const nx = me.x + me.vx * DT;
+      const ny = me.y + me.vy * DT;
+      me.x = clamp(nx, 20, W - 20);
+      me.y = clamp(ny, 20, H - 20);
+      if (me.x !== nx) me.vx = 0; // hit a wall
+      if (me.y !== ny) me.vy = 0;
+      const sp = Math.sqrt(me.vx * me.vx + me.vy * me.vy);
+      me.moving = sp > 8;
+      me.moveFrac = clamp(sp / Math.max(1, me.s.speed), 0, 1.5);
     }
 
     // ── energy + heat ──
@@ -315,7 +345,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     }
 
     // ── firing (resolved simultaneously) ──
-    const pending: { target: 0 | 1; dmg: number }[] = [];
+    const pending: { target: 0 | 1; dmg: number; kx: number; ky: number }[] = [];
     for (let i = 0; i < 2; i++) {
       const me = mechs[i]!;
       const foe = mechs[1 - i]!;
@@ -348,14 +378,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (me.s.behavior === 'turtle') acc *= 1.12;
         if (wp.type === 'explosive') acc *= arena.explosiveAccuracy;
         acc *= 1 - 0.25 * (dist / wp.maxRange);
-        let ev = foe.s.evasion * (foe.moving ? 1 : 0.3) * (0.5 + 0.5 * (dist / wp.maxRange));
+        let ev = foe.s.evasion * (0.3 + 0.7 * Math.min(1, foe.moveFrac)) * (0.5 + 0.5 * (dist / wp.maxRange));
         if (foe.s.behavior === 'kite' && foe.moving) ev *= 1.2;
         if (active(foe, 'kite')) {
           ev += 0.3;
           acc *= 0.7;
         }
         if (active(foe, 'flank')) ev += 0.5;
-        if (wp.homing) ev *= 0.4;
+        if (wp.homing) ev *= 0.6;
         let p = clamp(acc * (1 - ev), 0.05, 0.97);
         if (crit) p = Math.min(0.97, p + 0.35);
         const hit = rng.chance(p);
@@ -364,7 +394,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         let blocked = false;
         if (hit) {
           dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
-          if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.8; // braced
+          if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.86; // braced
           if (foe.s.behavior === 'rush') dmg *= 1.08; // reckless
           dmg *= me.dmgMult;
           if (crit) dmg *= 3.5;
@@ -380,7 +410,16 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               blocked = true;
             }
           }
-          pending.push({ target: i === 0 ? 1 : 0, dmg });
+          // knockback: big, slow hits shove the target; heavy mechs barely budge
+          const kb = { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
+          const push = Math.min(170, (dmg * kb * 18) / Math.max(30, foe.s.weight));
+          const d = dist || 1;
+          pending.push({
+            target: i === 0 ? 1 : 0,
+            dmg,
+            kx: ((foe.x - me.x) / d) * push,
+            ky: ((foe.y - me.y) / d) * push,
+          });
           me.dealt += dmg;
         }
         events.push({
@@ -395,7 +434,14 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         });
       });
     }
-    for (const p of pending) mechs[p.target]!.hp -= p.dmg;
+    for (const p of pending) {
+      const t = mechs[p.target]!;
+      t.hp -= p.dmg;
+      if (!active(t, 'turtle')) {
+        t.vx += p.kx;
+        t.vy += p.ky;
+      }
+    }
 
     if (tick % FRAME_EVERY === 0) pushFrame();
     if (mechs[0].hp <= 0 || mechs[1].hp <= 0) break;

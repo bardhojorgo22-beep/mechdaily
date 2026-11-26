@@ -288,7 +288,11 @@ const drawProps = (g: CanvasRenderingContext2D, arena: Arena, w: number, h: numb
   }
 };
 
-export type Renderer = { draw: (t: number, dt: number) => boolean };
+export type Renderer = {
+  draw: (t: number, dt: number) => boolean;
+  /** Seconds of hit-stop requested by big impacts; the caller pauses sim time. */
+  takeFreeze: () => number;
+};
 
 export const createRenderer = (
   canvas: HTMLCanvasElement,
@@ -372,6 +376,14 @@ export const createRenderer = (
   let flash = 0;
   const debrisDone = new Set<number>();
   let sepOffset = 0;
+  let freeze = 0;
+  const recoil = [
+    { until: 0, px: 0 },
+    { until: 0, px: 0 },
+  ];
+  const facing: (1 | -1)[] = [1, -1];
+  const walked = [0, 0];
+  const lastPos: { x: number; y: number }[] = [];
   let nextSpecial = 0;
   const trail: { x: number; y: number }[][] = [[], []];
   let lastT = 0;
@@ -474,6 +486,10 @@ export const createRenderer = (
         color: mc,
         size: fx === 'rail' || fx === 'shell' ? 4 : 2,
       };
+      const kick =
+        fx === 'rail' || fx === 'shell' ? 4 : fx === 'pellets' || fx === 'spike' ? 3 : fx === 'missiles' ? 2 : 1;
+      if (kick >= recoil[ev.by]!.px || t > recoil[ev.by]!.until)
+        recoil[ev.by] = { until: t + (kick > 2 ? 1.5 : 0.7), px: kick };
       if (fx === 'tracer' || fx === 'bullet' || fx === 'pellets') {
         // ejected shell casing
         spawn(me.x, me.y, 1, ['#d9a441', '#8a6a2a'], 18, 0.5, 1, foe.x < me.x ? 0.8 : -0.8, -0.6, 0.3);
@@ -531,6 +547,7 @@ export const createRenderer = (
       }
       const big = ev.dmg > 140;
       flashUntil[victim] = t + 1.2;
+      if (!quiet) freeze = Math.max(freeze, ev.dmg > 300 ? 0.13 : big ? 0.07 : ev.type === 'melee' ? 0.05 : 0);
       if (ev.blocked) {
         shieldUntil[victim] = t + 2;
         sfx.block();
@@ -614,6 +631,7 @@ export const createRenderer = (
       koPlayed = true;
       const loser = pos[1 - result.winner]!;
       if (result.reason === 'ko') {
+        freeze = 0.25;
         sfx.ko();
         shake = 8;
         flash = 0.2;
@@ -665,6 +683,16 @@ export const createRenderer = (
       }
     }
 
+    for (let i = 0; i < 2; i++) {
+      const p = pos[i]!;
+      const o = pos[1 - i]!;
+      if (o.x < p.x - 6) facing[i] = -1;
+      else if (o.x > p.x + 6) facing[i] = 1;
+      const lp = lastPos[i];
+      if (lp) walked[i] = walked[i]! + Math.hypot(p.x - lp.x, p.y - lp.y);
+      lastPos[i] = { x: p.x, y: p.y };
+    }
+
     // mechs, back to front
     const order = pos[0]!.y < pos[1]!.y ? [0, 1] : [1, 0];
     for (const i of order) {
@@ -678,7 +706,7 @@ export const createRenderer = (
       let bobY = 0;
       if (leg === 'reverse') bobY = -Math.round(hop);
       else if (leg === 'hover') bobY = Math.floor(t / 3 + i) % 2 === 0 ? -2 : -1;
-      else if (m.moving) bobY = Math.floor(t / 1.5) % 2 === 0 ? -1 : 0;
+      else if (m.moving) bobY = Math.floor(walked[i]! / 7) % 2 === 0 ? -1 : 0; // a step every few pixels walked
       const x = Math.round(p.x);
       const y = Math.round(p.y);
       const shadowW = Math.max(12, 24 - Math.round(hop));
@@ -707,7 +735,7 @@ export const createRenderer = (
             g.save();
             g.globalAlpha = 0.35 - k * 0.05;
             g.translate(pt.x, pt.y);
-            if (other.x < p.x) g.scale(-1, 1);
+            if (facing[i] === -1) g.scale(-1, 1);
             g.drawImage(sp.white, -SW / 2, -SH / 2);
             g.restore();
           });
@@ -718,8 +746,10 @@ export const createRenderer = (
         g.fillRect(x - SW / 2 - 2, y - SH / 2 - 2, SW + 4, SH + 4);
       }
       g.save();
-      g.translate(x, y + bobY);
-      if (other.x < p.x) g.scale(-1, 1);
+      const rc = recoil[i]!;
+      const kickBack = t < rc.until ? Math.round(rc.px * ((rc.until - t) / (rc.px > 2 ? 1.5 : 0.7))) : 0;
+      g.translate(x - facing[i]! * kickBack, y + bobY);
+      if (facing[i] === -1) g.scale(-1, 1);
       if (m.hp <= 0) g.globalAlpha = 0.35;
       if (sp) g.drawImage(t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0 ? sp.white : sp.normal, -SW / 2, -SH / 2);
       else {
@@ -1047,5 +1077,12 @@ export const createRenderer = (
     return particles.length > 0 || shake > 0.2 || flash > 0;
   };
 
-  return { draw };
+  return {
+    draw,
+    takeFreeze: () => {
+      const f = freeze;
+      freeze = 0;
+      return f;
+    },
+  };
 };

@@ -109,11 +109,13 @@ export const BattleView = ({
     if (!renderer) return;
     let raf = 0;
     let last = performance.now();
+    let hold = 0; // hit-stop: sim time pauses, effects keep moving
     const started = performance.now();
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      const playing = now - started > INTRO_MS || tickRef.current > 0;
+      hold = Math.max(hold - dt, 0);
+      const playing = (now - started > INTRO_MS || tickRef.current > 0) && hold <= 0;
       const left = result.ticks - tickRef.current;
       const slow = result.reason === 'ko' && left < 10 ? 0.3 : 1;
       if (playing && tickRef.current < result.ticks) {
@@ -121,6 +123,7 @@ export const BattleView = ({
         setTick(tickRef.current);
       }
       const busy = renderer.draw(tickRef.current, dt);
+      hold = Math.max(hold, renderer.takeFreeze() / Math.max(1, speedRef.current));
       if (tickRef.current < result.ticks || busy) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
