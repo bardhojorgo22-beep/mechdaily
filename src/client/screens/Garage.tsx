@@ -25,9 +25,21 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 const partStats = (p: Part): string[] => {
   switch (p.slot) {
     case 'head':
-      return [`HP ${p.hp}`, `AIM ${pct(p.accuracy)}`, `SENSOR ${p.sensor}m`];
+      return [
+        `HP ${p.hp}`,
+        `AIM ${pct(p.accuracy)}`,
+        `SENSOR ${p.sensor}m`,
+        ...(p.melee ? [`MELEE +${pct(p.melee)}`] : []),
+      ];
     case 'core':
-      return [`HP ${p.hp}`, `ARM-K ${pct(p.armorK)}`, `ARM-E ${pct(p.armorE)}`, `COOL ${p.cooling}`, `LOAD +${p.load}`];
+      return [
+        `HP ${p.hp}`,
+        `ARM-K ${pct(p.armorK)}`,
+        `ARM-E ${pct(p.armorE)}`,
+        `COOL ${p.cooling}`,
+        `LOAD +${p.load}`,
+        ...(p.energy ? [`POWER +${p.energy}/s`] : []),
+      ];
     case 'arms':
       return [`HP ${p.hp}`, `AIM ${pct(p.accuracy)}`];
     case 'legs':
@@ -52,12 +64,21 @@ const partStats = (p: Part): string[] => {
           ...(w.heavy ? ['PLANT TO FIRE'] : []),
           ...(w.charge ? ['CHARGE BONUS'] : []),
           ...(w.pierce ? ['IGNORES ARMOR'] : []),
+          ...(w.chill ? ['SLOWS'] : []),
+          ...(w.shock ? ['DRAINS POWER'] : []),
+          ...(w.acid ? ['MELTS ARMOR'] : []),
+          ...(w.yank ? ['YANKS'] : []),
+          ...(w.spinUp ? ['SPINS UP'] : []),
+          ...(w.splash ? ['SPLASH'] : []),
+          ...(w.slam ? ['ALWAYS STAGGERS'] : []),
+          ...(w.shred || w.slam ? ['SHREDS SHIELDS'] : []),
         ];
       }
       if ('shield' in p)
         return [
           `BLOCK ${pct(p.shield.block)}`,
           ...(p.shield.energyPerHit ? [`EN ${p.shield.energyPerHit}/block`] : []),
+          ...(p.shield.bash ? ['BASHES MELEE'] : []),
         ];
       if ('utility' in p) {
         const u = p.utility;
@@ -69,6 +90,10 @@ const partStats = (p: Part): string[] => {
           ...(u.range ? [`RANGE +${pct(u.range)}`] : []),
           ...(u.cooling ? [`COOL +${u.cooling}`] : []),
           ...(u.jam ? [`ENEMY AIM -${pct(u.jam)}`] : []),
+          ...(u.mines ? [`MINES ${u.mines.damage} DMG`, `EVERY ${(u.mines.every / 10).toFixed(1)}s`] : []),
+          ...(u.smoke ? [`SMOKE ${(u.smoke.dur / 10).toFixed(1)}s`, `EVERY ${(u.smoke.every / 10).toFixed(0)}s`] : []),
+          ...(u.barrier ? [`BUBBLE ${u.barrier.hp}`, `+${u.barrier.regen}/s`] : []),
+          ...(u.pull ? ['MAGNET'] : []),
         ];
       }
       return [];

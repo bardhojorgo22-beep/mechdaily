@@ -69,7 +69,39 @@ const LEGS: Record<string, (c: Ctx) => ReactNode> = {
   ),
 };
 
+const SPIDER_LEGS: [number, number, number][] = [
+  [70, 40, 196],
+  [80, 56, 208],
+  [88, 74, 204],
+];
+LEGS['l-spider'] = (c) => (
+  <g {...s}>
+    {SPIDER_LEGS.map(([x0, x1, y1], k) => {
+      const l = `M${x0} 146 L${x1} ${150 + k * 6} L${x1 - 6} ${y1}`;
+      const r = `M${200 - x0} 146 L${200 - x1} ${150 + k * 6} L${206 - x1} ${y1}`;
+      return (
+        <g key={k}>
+          <path d={l} fill="none" strokeWidth={6} />
+          <path d={r} fill="none" strokeWidth={6} />
+          <path d={l} fill="none" stroke={c.dark} strokeWidth={3} />
+          <path d={r} fill="none" stroke={c.dark} strokeWidth={3} />
+        </g>
+      );
+    })}
+    <ellipse cx={100} cy={150} rx={34} ry={14} fill={c.body} />
+    <circle cx={100} cy={150} r={5} fill={c.trim} />
+  </g>
+);
+
 const CORES: Record<string, (c: Ctx) => ReactNode> = {
+  'c-reactor': (c) => (
+    <g {...s}>
+      <rect x={66} y={84} width={68} height={60} rx={10} fill={c.body} />
+      <circle cx={100} cy={114} r={17} fill={INK} />
+      <circle cx={100} cy={114} r={11} fill="#3cf0ec" />
+      <circle cx={100} cy={114} r={5} fill="#ffffff" />
+    </g>
+  ),
   'c-shell': (c) => <rect x={72} y={86} width={56} height={56} rx={14} fill={c.body} {...s} />,
   'c-vault': (c) => (
     <g {...s}>
@@ -95,6 +127,20 @@ const CORES: Record<string, (c: Ctx) => ReactNode> = {
 };
 
 const HEADS: Record<string, (c: Ctx) => ReactNode> = {
+  'h-visor': (c) => (
+    <g {...s}>
+      <path d="M84 60 L116 60 L118 84 L82 84 Z" fill={c.body} />
+      <rect x={80} y={64} width={40} height={9} rx={3} fill="#ff2e63" />
+      <rect x={86} y={66} width={8} height={4} fill="#ffffff" stroke="none" />
+    </g>
+  ),
+  'h-horn': (c) => (
+    <g {...s}>
+      <rect x={84} y={58} width={32} height={26} rx={6} fill={c.body} />
+      <path d="M96 58 Q100 30 116 26 Q106 40 106 58 Z" fill="#e8e2d4" />
+      <rect x={89} y={68} width={22} height={5} rx={2} fill={c.trim} />
+    </g>
+  ),
   'h-lantern': (c) => (
     <g {...s}>
       <rect x={86} y={56} width={28} height={26} rx={5} fill={c.body} />
@@ -164,6 +210,78 @@ const HAND_WEAPONS: Record<string, (x: number, c: Ctx) => ReactNode> = {
       <path d={`M${x - 4} 138 Q${x - 26} 172 ${x - 4} 206`} fill="none" stroke={c.trim} strokeWidth={2} />
       <line x1={x - 4} y1={138} x2={x - 4} y2={206} strokeWidth={1} />
       <circle cx={x - 15} cy={172} r={4} fill={c.trim} />
+    </g>
+  ),
+  'r-frost': (x, c) => (
+    <g {...s}>
+      <rect x={x - 8} y={130} width={16} height={26} rx={4} fill={c.dark} />
+      <rect x={x - 5} y={154} width={10} height={30} fill="#bffcfb" />
+      <path d={`M${x - 9} 184 L${x + 9} 184 L${x} 196 Z`} fill="#3cf0ec" />
+    </g>
+  ),
+  'r-tesla': (x, c) => (
+    <g {...s}>
+      <rect x={x - 7} y={130} width={14} height={22} rx={3} fill={c.dark} />
+      <line x1={x} y1={152} x2={x} y2={184} />
+      {[160, 170, 180].map((y) => (
+        <ellipse key={y} cx={x} cy={y} rx={9} ry={3} fill={c.trim} />
+      ))}
+      <circle cx={x} cy={190} r={6} fill="#ffd23f" />
+    </g>
+  ),
+  'r-harpoon': (x, c) => (
+    <g {...s}>
+      <rect x={x - 7} y={130} width={14} height={30} rx={3} fill={c.dark} />
+      <line x1={x} y1={160} x2={x} y2={198} />
+      <path d={`M${x - 7} 192 L${x} 208 L${x + 7} 192 L${x} 198 Z`} fill="#e8e2d4" />
+    </g>
+  ),
+  'r-chainsaw': (x, c) => (
+    <g {...s}>
+      <rect x={x - 9} y={128} width={18} height={20} rx={3} fill={c.trim} />
+      <rect x={x - 6} y={146} width={12} height={52} rx={6} fill="#e8e2d4" />
+      <path
+        d={`M${x - 6} 152 L${x - 10} 156 L${x - 6} 160 L${x - 10} 164 L${x - 6} 168 L${x - 10} 172 L${x - 6} 176 L${x - 10} 180 L${x - 6} 184 L${x - 10} 188 L${x - 6} 192`}
+        fill="none"
+        strokeWidth={2}
+      />
+    </g>
+  ),
+  'r-hammer': (x, c) => (
+    <g {...s}>
+      <rect x={x - 3} y={128} width={6} height={52} fill={c.dark} />
+      <rect x={x - 16} y={176} width={32} height={22} rx={3} fill={c.trim} />
+      <rect x={x - 16} y={184} width={32} height={6} fill={c.dark} />
+    </g>
+  ),
+  'r-minigun': (x, c) => (
+    <g {...s}>
+      <rect x={x - 10} y={128} width={20} height={20} rx={4} fill={c.dark} />
+      {[-6, -2, 2, 6].map((o) => (
+        <rect key={o} x={x + o - 1.5} y={146} width={3} height={44} fill={INK} />
+      ))}
+      <rect x={x - 9} y={170} width={18} height={5} fill={c.trim} />
+    </g>
+  ),
+  'lw-acid': (x, c) => (
+    <g {...s}>
+      <rect x={x - 8} y={130} width={16} height={18} rx={3} fill={c.dark} />
+      <rect x={x - 10} y={146} width={20} height={22} rx={8} fill="#7cd85a" />
+      <rect x={x - 3} y={166} width={6} height={16} fill={c.trim} />
+    </g>
+  ),
+  'lw-riot': (x, c) => (
+    <g {...s}>
+      <rect x={x - 4} y={124} width={30} height={78} rx={4} fill={c.dark} />
+      <rect x={x + 2} y={134} width={18} height={10} rx={2} fill="#bffcfb" />
+      <path d={`M${x + 4} 156 L${x + 22} 156 M${x + 4} 168 L${x + 22} 168 M${x + 4} 180 L${x + 22} 180`} />
+    </g>
+  ),
+  'lw-grenade': (x, c) => (
+    <g {...s}>
+      <rect x={x - 10} y={130} width={20} height={20} rx={4} fill={c.dark} />
+      <circle cx={x} cy={160} r={11} fill={c.trim} />
+      <rect x={x - 5} y={168} width={10} height={20} fill={INK} />
     </g>
   ),
   'r-scatter': (x, c) => (
@@ -299,6 +417,32 @@ const BACKS: Record<string, (c: Ctx) => ReactNode> = {
       <path d="M78 34 A22 22 0 0 0 122 34 L110 34 A10 10 0 0 1 90 34 Z" fill={c.dark} />
       <rect x={76} y={26} width={14} height={10} fill="#e4572e" />
       <rect x={110} y={26} width={14} height={10} fill="#3cf0ec" />
+    </g>
+  ),
+  'bk-mines': (c) => (
+    <g {...s}>
+      <rect x={60} y={66} width={24} height={26} rx={4} fill={c.dark} />
+      {[72, 80, 88].map((y) => (
+        <circle key={y} cx={138} cy={y} r={7} fill="#e4572e" />
+      ))}
+      <rect x={128} y={62} width={20} height={34} rx={4} fill="none" />
+    </g>
+  ),
+  'bk-smoke': (c) => (
+    <g {...s}>
+      {[64, 76, 124, 136].map((x) => (
+        <rect key={x} x={x - 5} y={50} width={10} height={36} rx={3} fill={c.dark} />
+      ))}
+      {[64, 76, 124, 136].map((x) => (
+        <circle key={`p${x}`} cx={x} cy={48} r={4} fill="#c9c4b8" />
+      ))}
+    </g>
+  ),
+  'bk-barrier': (c) => (
+    <g {...s}>
+      <line x1={140} y1={82} x2={150} y2={50} />
+      <circle cx={150} cy={44} r={11} fill={c.dark} />
+      <circle cx={150} cy={44} r={5} fill="#3cf0ec" />
     </g>
   ),
   'bk-fins': (c) => (

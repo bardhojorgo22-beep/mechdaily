@@ -172,6 +172,44 @@ export const sfx = {
         noise(0.6, 0.6, 1100);
         tone(70, 25, 0.5, 'square', 0.3);
         break;
+      case 'frost': // crystal chime + hiss
+        if (!throttle(key, 120)) return;
+        tone(2400 * p, 3200, 0.12, 'sine', 0.06);
+        noise(0.15, 0.12, 7000);
+        break;
+      case 'tesla': // zap
+        if (!throttle(key, 90)) return;
+        tone(120 * p, 60, 0.12, 'sawtooth', 0.12);
+        noise(0.1, 0.25, 9000);
+        break;
+      case 'harpoon': // clank + chain
+        if (!throttle(key, 200)) return;
+        tone(700 * p, 300, 0.08, 'square', 0.1);
+        for (let k = 0; k < 4; k++) noise(0.03, 0.12, 5000, 0.06 + k * 0.04);
+        break;
+      case 'saw': // motor
+        if (!throttle(key, 140)) return;
+        tone(110 * p, 130, 0.15, 'sawtooth', 0.08);
+        noise(0.12, 0.12, 4000);
+        break;
+      case 'hammer': // huge
+        noise(0.7, 0.6, 900);
+        tone(55, 25, 0.6, 'square', 0.3);
+        break;
+      case 'minigun': // fast ticks
+        if (!throttle(key, 45)) return;
+        noise(0.03, 0.18, 3500);
+        tone(160 * p, 140, 0.03, 'square', 0.05);
+        break;
+      case 'acid': // hiss
+        if (!throttle(key, 180)) return;
+        noise(0.25, 0.12, 5000);
+        break;
+      case 'grenade': // thoomp
+        if (!throttle(key, 200)) return;
+        tone(150 * p, 70, 0.18, 'triangle', 0.2);
+        tone(900, 800, 0.03, 'square', 0.05, 0.35);
+        break;
       case 'pistol': // pew-pew
         if (!throttle(key, 120)) return;
         tone(1300 * p, 500, 0.05, 'square', 0.07);
@@ -243,6 +281,24 @@ export const sfx = {
       default:
         noise(0.06, 0.25, 3000);
     }
+  },
+  bash: () => {
+    tone(400, 120, 0.15, 'square', 0.16);
+    noise(0.15, 0.3, 2500);
+  },
+  gamble: (good: boolean) =>
+    good
+      ? [880, 1320].forEach((f, i) => tone(f, f, 0.08, 'square', 0.08, i * 0.06))
+      : tone(300, 150, 0.25, 'triangle', 0.1),
+  mineDrop: () => tone(1200, 1100, 0.04, 'square', 0.04),
+  mineBoom: () => {
+    noise(0.6, 0.5, 1200);
+    tone(90, 30, 0.4, 'square', 0.22);
+  },
+  smoke: () => noise(0.5, 0.2, 1800),
+  glass: () => {
+    noise(0.3, 0.3, 9000);
+    tone(2600, 1800, 0.2, 'triangle', 0.06);
   },
   bowDraw: () => tone(90, 160, 0.35, 'sawtooth', 0.03),
   railCharge: () => tone(300, 2400, 0.45, 'sine', 0.06),

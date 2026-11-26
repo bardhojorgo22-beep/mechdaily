@@ -72,6 +72,14 @@ export const THEMES: Record<string, Theme> = {
 type Fx =
   | 'tracer'
   | 'pistol'
+  | 'frost'
+  | 'tesla'
+  | 'harpoon'
+  | 'saw'
+  | 'hammer'
+  | 'minigun'
+  | 'acid'
+  | 'grenade'
   | 'arrow'
   | 'ram'
   | 'bullet'
@@ -105,6 +113,14 @@ const FX_BY_PART: Record<string, Fx> = {
   'r-lance': 'thrust',
   'lw-knuckle': 'punch',
   'lw-saber': 'slash',
+  'r-frost': 'frost',
+  'r-tesla': 'tesla',
+  'r-harpoon': 'harpoon',
+  'r-chainsaw': 'saw',
+  'r-hammer': 'hammer',
+  'r-minigun': 'minigun',
+  'lw-acid': 'acid',
+  'lw-grenade': 'grenade',
 };
 
 const FALLBACK: Record<ShotEvent['type'], Fx> = {
@@ -132,6 +148,16 @@ const flightOf = (fx: Fx, dist: number): number => {
       return 2;
     case 'arrow':
       return Math.max(1.5, dist / 55);
+    case 'frost':
+      return Math.max(1.5, dist / 50);
+    case 'harpoon':
+      return Math.max(1.5, dist / 60);
+    case 'minigun':
+      return Math.max(1, dist / 75);
+    case 'acid':
+      return Math.max(1.5, dist / 40);
+    case 'grenade':
+      return Math.max(4, dist / 26);
     default:
       return 0;
   }
@@ -464,6 +490,8 @@ export const createRenderer = (
     slash: { windup: 4, back: 5, out: 8, hold: 1.2 },
     thrust: { windup: 5, back: 6, out: 14, hold: 1.8 },
     spike: { windup: 9, back: 7, out: 12, hold: 2.4 },
+    saw: { windup: 0, back: 0, out: 4, hold: 0.3 },
+    hammer: { windup: 11, back: 9, out: 10, hold: 2.8 },
   };
   // rail shots telegraph with a charge glow; drones orbit their owner all fight
   const railTimes: number[][] = [[], []];
@@ -486,6 +514,14 @@ export const createRenderer = (
     return { x: p.x + Math.cos(a) * 14, y: p.y - SPRITE_H * 0.55 + Math.sin(a) * 4 };
   };
   const burnUntil = [0, 0];
+  const chillUntil = [0, 0];
+  const shockUntil = [0, 0];
+  const acidUntil = [0, 0];
+  const yankUntil = [0, 0];
+  const barrierDownUntil = [0, 0];
+  const hasBarrier = builds.map((b) => b.parts.back === 'bk-barrier');
+  const lastSawWord = [-99, -99];
+  let nextMisc = 0;
   const zaps: { x0: number; y0: number; x1: number; y1: number; until: number }[] = [];
   const ringFx: { x: number; y: number; t: number }[] = [];
   const lastPunch = [-99, -99];
@@ -681,6 +717,64 @@ export const createRenderer = (
       }
     }
 
+    // ── mines, smoke, barrier breaks ──
+    while (nextMisc < result.misc.length && result.misc[nextMisc]!.t <= t) {
+      const me2 = result.misc[nextMisc++]!;
+      if (t - me2.t > 20) continue;
+      const mx = me2.x * sc;
+      const my = me2.y * sc;
+      if (me2.kind === 'mine-drop') sfx.mineDrop();
+      if (me2.kind === 'mine-boom') {
+        spawn(mx, my, 26, ['#ffffff', '#ffd23f', '#ff7a2f', '#c0392b', '#5b5148'], 55, 0.7, 2, 0, -0.3, 1, 1);
+        scorch(mx, my, 8);
+        bursts.push({ x: mx, y: my - 8, t, word: 'BOOM!', big: true });
+        shake = Math.max(shake, 6);
+        sfx.mineBoom();
+      }
+      if (me2.kind === 'smoke') sfx.smoke();
+      if (me2.kind === 'barrier-break') {
+        const p = pos[me2.by]!;
+        spawn(p.x, p.y, 22, ['#ffffff', '#bffcfb', '#3cf0ec'], 60, 0.5, 1);
+        barrierDownUntil[me2.by] = t + 90;
+        sfx.glass();
+      }
+    }
+    // armed mines on the ground (dropped, not yet blown)
+    for (const md of result.misc) {
+      if (md.kind !== 'mine-drop' || md.t > t) continue;
+      const boomed = result.misc.some(
+        (b) => b.kind === 'mine-boom' && b.by === md.by && b.x === md.x && b.y === md.y && b.t <= t
+      );
+      const replaced =
+        result.misc.filter((d) => d.kind === 'mine-drop' && d.by === md.by && d.t > md.t && d.t <= t).length >= 4;
+      if (boomed || replaced) continue;
+      const mx = Math.round(md.x * sc);
+      const my = Math.round(md.y * sc);
+      g.fillStyle = '#1b1a17';
+      g.fillRect(mx - 2, my - 1, 5, 3);
+      g.fillStyle = t - md.t > 10 && Math.floor(t * 3) % 2 === 0 ? '#ff2e2e' : '#8a3a2a';
+      g.fillRect(mx, my - 1, 1, 1);
+    }
+    // smoke clouds around whoever popped them
+    for (const sm of result.misc) {
+      if (sm.kind !== 'smoke' || t < sm.t || t > (sm.until ?? sm.t)) continue;
+      const p = pos[sm.by]!;
+      if (rng.chance(0.8))
+        spawn(
+          p.x + (rng.next() - 0.5) * 40,
+          p.y + (rng.next() - 0.5) * 26,
+          1,
+          ['#f4f0e6', '#d6d1c4', '#a9a497'],
+          6,
+          1.4,
+          4,
+          0,
+          -0.1,
+          1,
+          3
+        );
+    }
+
     // ── chip specials ──
     while (nextSpecial < result.specials.length && result.specials[nextSpecial]!.t <= t) {
       const sp = result.specials[nextSpecial++]!;
@@ -843,6 +937,11 @@ export const createRenderer = (
       }
       if (!ev.hit) {
         spawn(at.x, at.y + 4, 3, [theme.speck, theme.dark], 14, 0.4, 1);
+        if (fx === 'grenade') {
+          spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ff7a2f', '#5b5148'], 38, 0.5, 2);
+          scorch(at.x, at.y, 5);
+          if (ev.dmg > 0) flashUntil[victim] = t + 0.8;
+        }
         if (fx === 'missiles' || fx === 'shell') {
           spawn(
             at.x,
@@ -865,6 +964,8 @@ export const createRenderer = (
         freeze = Math.max(freeze, ev.type === 'melee' ? (big ? 0.16 : 0.1) : ev.dmg > 300 ? 0.13 : big ? 0.07 : 0);
       if (ev.type === 'melee') {
         const words: Record<string, string[]> = {
+          saw: ['GRRRIND!', 'RRRRR!'],
+          hammer: ['KRAKOOM!', 'SLAM!'],
           ram: ['CRASH!', 'WHAM!', 'IMPACT!'],
           spike: ['CRACK!', 'KA-CHUNK!'],
           thrust: ['SKEWER!', 'IMPALE!'],
@@ -875,14 +976,28 @@ export const createRenderer = (
         let word = opts[(i + ev.t) % opts.length]!;
         if (fx === 'punch' && !big && ev.t - lastPunch[ev.by]! < 25) word = '1-2!';
         if (fx === 'punch') lastPunch[ev.by] = ev.t;
-        bursts.push({ x: at.x, y: at.y - 6, t, word, big: big || fx === 'spike' || fx === 'ram' });
-        sfx.pow(big);
-        shake = Math.max(shake, big ? 6 : 3);
+        // the chainsaw hits constantly: only shout now and then
+        const sawQuiet = fx === 'saw' && ev.t - lastSawWord[ev.by]! < 25;
+        if (fx === 'saw' && !sawQuiet) lastSawWord[ev.by] = ev.t;
+        if (!sawQuiet)
+          bursts.push({ x: at.x, y: at.y - 6, t, word, big: big || fx === 'spike' || fx === 'ram' || fx === 'hammer' });
+        if (fx !== 'saw') sfx.pow(big);
+        shake = Math.max(shake, fx === 'hammer' ? 9 : fx === 'saw' ? 1 : big ? 6 : 3);
       }
       if (ev.blocked) {
         shieldUntil[victim] = t + 2;
         sfx.block();
-      } else sfx.hit(big);
+      } else if (fx !== 'saw' && fx !== 'minigun') sfx.hit(big);
+      if (ev.bashed) {
+        // riot shield bashes the attacker back
+        bursts.push({ x: me.x, y: me.y - 10, t, word: 'BASH!', big: false });
+        dazedUntil[ev.by] = t + 7;
+        sfx.bash();
+      }
+      if (ev.gamble === 'x2') {
+        bursts.push({ x: at.x, y: at.y - 16, t, word: 'x2!', big: false });
+        sfx.gamble(true);
+      } else if (ev.gamble === 'half') sfx.gamble(false);
       switch (fx) {
         case 'missiles':
           spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ff7a2f', '#c0392b', '#5b5148'], 34, 0.55, 2, 0, -0.2, 1, 1);
@@ -934,6 +1049,41 @@ export const createRenderer = (
               0.25,
               1
             );
+          break;
+        case 'frost':
+          spawn(at.x, at.y, 12, ['#ffffff', '#bffcfb', '#3cf0ec'], 35, 0.5, 2, 0, 0, 1);
+          chillUntil[victim] = t + 30;
+          break;
+        case 'tesla':
+          spawn(at.x, at.y, 10, ['#ffffff', '#ffd23f', '#bffcfb'], 60, 0.2, 1);
+          shockUntil[victim] = t + 10;
+          break;
+        case 'harpoon':
+          spawn(at.x, at.y, 8, ['#ffffff', '#e8e2d4'], 30, 0.3, 1);
+          yankUntil[victim] = t + 10;
+          bursts.push({ x: at.x, y: at.y - 6, t, word: 'HOOKED!', big: false });
+          break;
+        case 'saw':
+          spawn(at.x, at.y, 6, ['#ffffff', '#ffd23f', '#ff7a2f'], 70, 0.2, 1, foe.x > me.x ? -0.6 : 0.6, -0.6, 0.5);
+          break;
+        case 'hammer':
+          spawn(at.x, at.y + 12, 26, [theme.speck, theme.dark, '#ffffff'], 60, 0.9, 3, 0, -0.3, 1, 1);
+          ringFx.push({ x: at.x, y: at.y + 12, t });
+          ringFx.push({ x: at.x, y: at.y + 12, t: t + 1.5 });
+          scorch(at.x, at.y + 10, 8);
+          flash = Math.max(flash, 0.12);
+          break;
+        case 'minigun':
+          spawn(at.x, at.y, 2, ['#ffffff', '#ffd23f'], 25, 0.15, 1);
+          break;
+        case 'acid':
+          spawn(at.x, at.y, 5, ['#b6f28c', '#7cd85a', '#3f8f2a'], 18, 0.6, 2, 0, 0.6, 0.5);
+          acidUntil[victim] = t + 60;
+          break;
+        case 'grenade':
+          spawn(at.x, at.y, 18, ['#ffffff', '#ffd23f', '#ff7a2f', '#5b5148'], 45, 0.6, 2, 0, -0.2, 1, 1);
+          scorch(at.x, at.y, 6);
+          shake = Math.max(shake, 3);
           break;
         case 'arrow': {
           // the arrow punches through and stays stuck in the armor
@@ -1334,6 +1484,43 @@ export const createRenderer = (
             sfx.railCharge();
           }
         }
+        // statuses
+        if (t < chillUntil[i]!) {
+          if (Math.floor(t * 3) % 2 === 0) {
+            g.strokeStyle = '#bffcfb';
+            g.lineWidth = 1;
+            g.strokeRect(x - SW / 2 - 1.5, y - SH / 2 - 1.5, SW + 3, SH + 3);
+          }
+          if (rng.chance(0.3))
+            spawn(x + (rng.next() - 0.5) * SW, y - SH * 0.4, 1, ['#ffffff', '#bffcfb'], 5, 0.8, 1, 0, 0.6, 0.3);
+        }
+        if (t < shockUntil[i]! && rng.chance(0.7)) {
+          const a = rng.next() * 6.283;
+          line(x, y, x + Math.cos(a) * SW * 0.6, y + Math.sin(a) * SH * 0.5, rng.chance(0.5) ? '#ffd23f' : '#ffffff');
+        }
+        if (t < acidUntil[i]! && rng.chance(0.25))
+          spawn(
+            x + (rng.next() - 0.5) * SW * 0.7,
+            y + (rng.next() - 0.5) * SH * 0.4,
+            1,
+            ['#b6f28c', '#7cd85a'],
+            4,
+            0.7,
+            1,
+            0,
+            1,
+            0.2
+          );
+        // barrier bubble
+        if (hasBarrier[i] && t >= barrierDownUntil[i]!) {
+          g.globalAlpha = 0.35 + (Math.floor(t * 4) % 2) * 0.1;
+          g.strokeStyle = '#3cf0ec';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.arc(Math.round(x), Math.round(y), Math.max(SW, SH) * 0.62, 0, Math.PI * 2);
+          g.stroke();
+          g.globalAlpha = 1;
+        }
         // gearbow: string draws back before the shot
         const bow = bowTimes[i]!.find((bt) => bt > t && bt - t <= 7);
         if (bow !== undefined) {
@@ -1574,6 +1761,82 @@ export const createRenderer = (
           line(p.x - ux * 7, p.y - uy * 7, p.x, p.y, '#ffd23f');
           g.fillStyle = '#ffffff';
           g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+          break;
+        }
+        case 'frost': {
+          if (age > flight) break;
+          const p = at(age / flight);
+          g.fillStyle = '#ffffff';
+          g.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 1, 4, 3);
+          g.fillStyle = '#3cf0ec';
+          g.fillRect(Math.round(p.x - ux * 4) - 1, Math.round(p.y - uy * 4) - 1, 2, 2);
+          if (rng.chance(0.5)) spawn(p.x, p.y, 1, ['#ffffff', '#bffcfb'], 6, 0.4, 1);
+          break;
+        }
+        case 'tesla': {
+          // jagged lightning that flickers for a moment
+          if (age > 1.6) break;
+          const segs = 6;
+          let px = from.x;
+          let py = from.y;
+          const col = Math.floor(age * 10) % 2 === 0 ? '#ffffff' : '#ffd23f';
+          for (let k = 1; k <= segs; k++) {
+            const f = k / segs;
+            const jit = k === segs ? 0 : ((((ev.t * 31 + k * 17 + Math.floor(age * 6)) % 13) - 6) / 6) * 7;
+            const nx = from.x + (to.x - from.x) * f - uy * jit;
+            const ny = from.y + (to.y - from.y) * f + ux * jit;
+            line(px, py, nx, ny, '#bffcfb', 2);
+            line(px, py, nx, ny, col, 1);
+            px = nx;
+            py = ny;
+          }
+          break;
+        }
+        case 'harpoon': {
+          const p = age > flight ? to : at(age / flight);
+          if (age > flight + 8) break;
+          // the chain back to the gun
+          for (let s2 = 0; s2 < 1; s2 += 0.08) {
+            const cx = from.x + (p.x - from.x) * s2;
+            const cy = from.y + (p.y - from.y) * s2 + Math.sin(s2 * Math.PI) * 3;
+            g.fillStyle = '#8a8478';
+            g.fillRect(Math.round(cx), Math.round(cy), 1, 1);
+          }
+          line(p.x - ux * 6, p.y - uy * 6, p.x, p.y, '#e8e2d4', 2);
+          break;
+        }
+        case 'minigun': {
+          if (age > flight) break;
+          const p = at(age / flight);
+          line(p.x - ux * 4, p.y - uy * 4, p.x, p.y, '#fff3b0');
+          break;
+        }
+        case 'acid': {
+          if (age > flight) break;
+          for (let k = 0; k < 3; k++) {
+            const pr = Math.min(1, Math.max(0, (age - k * 0.3) / flight));
+            const p = at(pr);
+            g.fillStyle = k === 0 ? '#b6f28c' : '#7cd85a';
+            g.fillRect(Math.round(p.x) - 1, Math.round(p.y + k), 2, 2);
+          }
+          break;
+        }
+        case 'grenade': {
+          if (age > flight) break;
+          // lobbed, with one bounce before it lands
+          const pr = age / flight;
+          const base = at(pr);
+          const h1 = Math.min(40, dist * 0.25);
+          const lift =
+            pr < 0.7
+              ? 4 * (pr / 0.7) * (1 - pr / 0.7) * h1
+              : 4 * ((pr - 0.7) / 0.3) * (1 - (pr - 0.7) / 0.3) * h1 * 0.3;
+          g.fillStyle = '#1b1a17';
+          g.fillRect(Math.round(base.x) - 2, Math.round(base.y - lift) - 2, 4, 4);
+          g.fillStyle = '#5b6b4e';
+          g.fillRect(Math.round(base.x) - 1, Math.round(base.y - lift) - 1, 2, 2);
+          g.fillStyle = 'rgba(27,26,23,0.25)';
+          g.fillRect(Math.round(base.x) - 2, Math.round(base.y) + 6, 4, 1);
           break;
         }
         case 'arrow': {
