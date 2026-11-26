@@ -61,6 +61,10 @@ export const REDSHIFT_CRASH = 8;
 /** Movement bursts, for visuals: quick boost (sideways dash) or overboost (long charge). */
 export type MoveEvent = { t: number; by: 0 | 1; kind: 'qb' | 'ob'; dx: number; dy: number };
 
+/** Last Stand: a killing blow instead purges the armor. 1 HP, brief invulnerability, then fast and fragile. */
+export const LAST_STAND_INVULN = 15;
+export type LastStandEvent = { t: number; by: 0 | 1 };
+
 export type SpecialEvent = {
   t: number;
   by: 0 | 1;
@@ -80,6 +84,7 @@ export type BattleResult = {
   hazardHits: number[]; // ticks where scrap fell
   specials: SpecialEvent[];
   moves: MoveEvent[];
+  lastStands: LastStandEvent[];
 };
 
 type MechState = {
@@ -111,6 +116,7 @@ type MechState = {
   obReady: number; // tick when overboost can fire again
   staggerImmune: number; // tick until which this mech can't be staggered again
   threat: number; // tick when a big enemy shot was telegraphed
+  lastStand: number; // tick the armor was purged, -1 = not yet
 };
 
 const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechState => ({
@@ -143,6 +149,7 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   obReady: 30,
   staggerImmune: 0,
   threat: -99,
+  lastStand: -1,
 });
 
 const reach = (m: MechState, wp: MountedWeapon, arena: Arena) =>
@@ -290,6 +297,9 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
   mechs[1].dmgMult = b.mods?.damage ?? 1;
   const specials: SpecialEvent[] = [];
   const moves: MoveEvent[] = [];
+  const lastStands: LastStandEvent[] = [];
+  const invuln = (m: MechState) => m.lastStand >= 0 && tick < m.lastStand + LAST_STAND_INVULN;
+  const stripped = (m: MechState) => m.lastStand >= 0;
   const active = (m: MechState, kind: MechStats['behavior']) => m.s.behavior === kind && m.specialUntil > tick;
   const frames: number[] = [];
   const events: ShotEvent[] = [];
@@ -313,7 +323,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     if (arena.hazard && tick % arena.hazard.every === 0) {
       hazardHits.push(tick);
       for (const m of mechs) {
-        if (rng.chance(0.5)) m.hp -= arena.hazard.damage * (1 - m.s.armorK);
+        if (rng.chance(0.5) && !invuln(m)) m.hp -= arena.hazard.damage * (stripped(m) ? 1 : 1 - m.s.armorK);
       }
     }
 
@@ -387,6 +397,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       if (active(me, 'rush')) speed = me.s.speed * 1.8;
       if (active(me, 'flank')) speed = me.s.speed * 1.6;
       if (active(me, 'redshift')) speed = me.s.speed * 2;
+      if (stripped(me)) speed *= 1.2; // nothing left to carry
       const turtleLock = active(me, 'turtle');
       const sniperSet = me.s.behavior === 'sniper' && Math.abs(dist - want) < band * 2;
 
@@ -532,7 +543,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       m.heat = Math.max(0, m.heat - m.s.cooling * DT);
       if (m.heat >= 100) m.overheated = true;
       else if (m.overheated && m.heat < 40) m.overheated = false;
-      if (m.s.behavior === 'berserk' && m.heat > 100) {
+      if (m.s.behavior === 'berserk' && m.heat > 100 && !stripped(m)) {
         // meltdown: running redline slowly cooks the pilot, but hits harder
         m.heat = Math.min(m.heat, 170);
         m.hp -= m.s.hp * 0.0032;
@@ -553,7 +564,10 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       );
       me.s.weapons.forEach((wp, w) => {
         me.cooldown[w] =
-          me.cooldown[w]! - (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1) - (active(me, 'redshift') ? 1 : 0);
+          me.cooldown[w]! -
+          (active(me, 'berserk') && tick % 2 === 0 ? 2 : 1) -
+          (active(me, 'redshift') ? 1 : 0) -
+          (stripped(me) && tick % 2 === 0 ? 1 : 0);
         const big = wp.heavy || wp.type === 'explosive' || wp.damage >= 150 || (me.charged && w === longest);
         if (big && me.cooldown[w]! === 2 && dist <= reach(me, wp, arena) + 50) foe.threat = tick;
         if (me.cooldown[w]! > 0) return;
@@ -590,6 +604,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         }
         if (active(foe, 'flank')) ev += 0.5;
         if (active(foe, 'redshift')) ev += 0.45;
+        if (stripped(foe)) ev += 0.1;
         if (active(me, 'redshift')) acc *= 1.15;
         if (foe.qbUntil > tick) ev += 0.3;
         if (wp.homing) ev *= 0.6;
@@ -609,7 +624,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           if (active(me, 'berserk')) dmg *= 1.15;
           if (me.s.behavior === 'berserk' && me.heat > 100) dmg *= 1 + Math.min(0.25, (me.heat - 100) / 200);
           if (active(foe, 'turtle')) dmg *= 0.6;
-          dmg *= 1 - armorAgainst(foe.s, wp.type);
+          if (!stripped(foe)) dmg *= 1 - armorAgainst(foe.s, wp.type);
           const sh = foe.s.shield;
           // shields come up more while the holder is charging in
           const closing = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.3;
@@ -634,6 +649,10 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               ? Math.min(9, Math.round(3 + (wp.damage * DAMAGE_SCALE * 4) / Math.max(40, foe.s.weight) / 8))
               : 0;
           staggerFlag = staggerTicks > 0;
+          if (invuln(foe)) {
+            dmg = 0; // shots pass through the purge flash
+            staggerFlag = false;
+          }
           // knockback: big, slow hits shove the target; heavy mechs barely budge
           const kb = { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
           const push = Math.min(170, (dmg * kb * 18) / Math.max(30, foe.s.weight));
@@ -663,6 +682,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     }
     for (const p of pending) {
       const t = mechs[p.target]!;
+      if (invuln(t)) continue;
       t.hp -= p.dmg;
       if (p.stagger > 0) {
         t.planted = Math.max(t.planted, p.stagger);
@@ -674,6 +694,30 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       if (!active(t, 'turtle')) {
         t.vx += p.kx;
         t.vy += p.ky;
+      }
+    }
+
+    // ── last stand: the first killing blow purges the armor instead ──
+    for (let i = 0; i < 2; i++) {
+      const m = mechs[i]!;
+      if (m.hp > 0 || m.lastStand >= 0) continue;
+      const o = mechs[1 - i]!;
+      m.hp = 1;
+      m.lastStand = tick;
+      m.overheated = false;
+      m.heat = 0;
+      m.planted = 0;
+      lastStands.push({ t: tick, by: i === 0 ? 0 : 1 });
+      // the plates blow off like shrapnel and shove the enemy back
+      const sx = o.x - m.x;
+      const sy = o.y - m.y;
+      const sd = Math.sqrt(sx * sx + sy * sy) || 1;
+      if (sd < 320) {
+        const shove = 260 / (1 + o.s.weight / 100);
+        o.vx += (sx / sd) * shove;
+        o.vy += (sy / sd) * shove;
+        if (!invuln(o)) o.hp = Math.max(Math.min(o.hp, 1), o.hp - o.s.hp * 0.04); // shrapnel never kills
+        o.ob = false;
       }
     }
 
@@ -704,5 +748,6 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     hazardHits,
     specials,
     moves,
+    lastStands,
   };
 };

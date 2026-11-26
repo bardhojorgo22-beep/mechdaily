@@ -1,7 +1,14 @@
 // Pixel-art renderer for a battle replay. Everything is drawn at a low
 // internal resolution and scaled up with nearest-neighbour by CSS.
 import type { Arena } from '../../shared/game/arenas';
-import { FRAME_EVERY, REDSHIFT_CRASH, SPECIALS, type BattleResult, type ShotEvent } from '../../shared/game/battle';
+import {
+  FRAME_EVERY,
+  LAST_STAND_INVULN,
+  REDSHIFT_CRASH,
+  SPECIALS,
+  type BattleResult,
+  type ShotEvent,
+} from '../../shared/game/battle';
 import { computeStats, type Build } from '../../shared/game/mech';
 import { getPart } from '../../shared/game/parts';
 import type { MechLayer } from '../components/mechLayers';
@@ -477,6 +484,7 @@ export const createRenderer = (
   let redshiftUntilT = -1;
   let curT = 0;
   const crashed = new Set<number>();
+  const lsSeen = new Set<number>();
   const magnetOf = builds.map((b) => b.parts.back === 'bk-magnet');
   let lastT = 0;
   const legTypes = builds.map((b) => {
@@ -656,6 +664,23 @@ export const createRenderer = (
         shake = Math.max(shake, 4);
       }
       shake = Math.max(shake, 2);
+    }
+    // Last Stand: armor blows off, time nearly stops
+    for (const ls of result.lastStands) {
+      const key = ls.t * 2 + ls.by;
+      if (lsSeen.has(key) || t < ls.t) continue;
+      lsSeen.add(key);
+      if (t - ls.t > 5) continue;
+      const p = pos[ls.by]!;
+      sfx.lastStand();
+      flash = Math.max(flash, 0.35);
+      shake = Math.max(shake, 7);
+      slowFactor = 0.22;
+      slowUntil = performance.now() + 1400;
+      // armor plates flying off
+      spawn(p.x, p.y, 22, ['#c9c4b8', '#8a8578', '#f4f0e6', '#1b1a17'], 130, 1.3, 4, 0, -0.3, 1);
+      spawn(p.x, p.y, 30, ['#ffffff', '#ffd23f', '#ff6b4a'], 90, 0.5, 2);
+      bursts.push({ x: p.x, y: p.y - 6, t, word: 'PURGE!', big: true });
     }
     // Redshift crash: the overclock comes due
     for (const sp of result.specials) {
@@ -1030,7 +1055,10 @@ export const createRenderer = (
         if (facing[i] === -1) g.scale(-1, 1);
         if (t < qbUntil[i]! && qbUntil[i]! - t > 2) g.scale(1.18, 0.88); // squash-and-stretch on the dash
         if (m.hp <= 0) g.globalAlpha = 0.35;
-        const flashing = t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0;
+        const lsNow = result.lastStands.find((l) => l.by === i && t >= l.t);
+        const flashing =
+          (t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0) ||
+          (!!lsNow && t < lsNow.t + LAST_STAND_INVULN && Math.floor(t * 5) % 2 === 0);
         if (!sp) {
           g.fillStyle = '#888';
           g.fillRect(-8, -12, 16, 24);
@@ -1129,6 +1157,43 @@ export const createRenderer = (
         g.restore();
       }
 
+      // Last Stand: golden invulnerability ring, then a stripped, sparking frame at 1 HP
+      const ls = result.lastStands.find((l) => l.by === i && t >= l.t);
+      if (ls && m.hp > 0) {
+        if (t < ls.t + LAST_STAND_INVULN) {
+          g.strokeStyle = Math.floor(t * 6) % 2 === 0 ? '#ffd23f' : '#ffffff';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.arc(Math.round(x), Math.round(y), SW * 0.75 + Math.sin(t * 3) * 2, 0, Math.PI * 2);
+          g.stroke();
+        } else {
+          if (Math.floor(t * 3) % 2 === 0) {
+            g.strokeStyle = '#ff2e2e';
+            g.lineWidth = 1;
+            g.strokeRect(x - SW / 2 - 2.5, y - SH / 2 - 2.5, SW + 5, SH + 5);
+          }
+          if (rng.chance(0.35))
+            spawn(
+              x + (rng.next() - 0.5) * SW * 0.7,
+              y + (rng.next() - 0.5) * SH * 0.6,
+              2,
+              ['#ffd23f', '#ffffff'],
+              35,
+              0.2,
+              1
+            );
+        }
+        if (Math.floor(t * 4) % 2 === 0) {
+          g.font = '8px Silkscreen, monospace';
+          g.textAlign = 'center';
+          g.textBaseline = 'top';
+          const ty = Math.round(y + SH / 2 + 2);
+          g.fillStyle = '#1b1a17';
+          g.fillRect(Math.round(x) - 13, ty - 1, 26, 10);
+          g.fillStyle = '#ff2e2e';
+          g.fillText('1 HP', Math.round(x), ty);
+        }
+      }
       if (act && act.kind === 'turtle') {
         g.strokeStyle = Math.floor(t * 4) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
         g.lineWidth = 1;

@@ -567,13 +567,13 @@ export const PARTS: Part[] = [
     drain: 3,
     weapon: w({
       type: 'energy',
-      damage: 716,
+      damage: 760,
       minRange: 255,
       maxRange: 1615,
-      cooldown: 44,
+      cooldown: 40,
       heat: 42,
       energyCost: 112,
-      accuracy: 0.86,
+      accuracy: 0.9,
       ammo: null,
       heavy: true,
     }),
@@ -740,7 +740,7 @@ export const PARTS: Part[] = [
     blurb: 'A shield made of an actual door.',
     weight: 9,
     drain: 1,
-    shield: { block: 0.52, energyPerHit: 0 },
+    shield: { block: 0.56, energyPerHit: 0 },
   },
   {
     id: 'lw-aegis',
@@ -748,8 +748,8 @@ export const PARTS: Part[] = [
     name: 'Aegis',
     blurb: 'Energy shield. Blocks a lot, costs a lot.',
     weight: 4,
-    drain: 4,
-    shield: { block: 0.7, energyPerHit: 9 },
+    drain: 2,
+    shield: { block: 0.78, energyPerHit: 6 },
   },
 
   // ── Back units ───────────────────────────────────────

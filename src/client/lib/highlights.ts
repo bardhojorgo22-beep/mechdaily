@@ -68,7 +68,13 @@ export const findHighlights = (r: BattleResult): Highlight[] => {
   }
 
   for (const sp of r.specials) {
+    // a last stand owns the screen; don't talk over it
+    if (r.lastStands.some((ls) => sp.t >= ls.t && sp.t - ls.t < 12)) continue;
     push({ t: sp.t, by: sp.by, text: `${SPECIALS[sp.kind].name.toUpperCase()}!`, tier: 1, focus: sp.by }, 4);
+  }
+
+  for (const ls of r.lastStands) {
+    push({ t: ls.t, by: ls.by, text: 'LAST STAND!', sub: 'armor purged · 1 HP', tier: 2, focus: ls.by }, 0);
   }
 
   // finale
@@ -79,7 +85,8 @@ export const findHighlights = (r: BattleResult): Highlight[] => {
   let worst = 0;
   for (let f = 0; f < frames; f++) worst = Math.min(worst, hpAt(r, f, w) - hpAt(r, f, l));
   let sub = '';
-  if (endHp > 0.9) sub = 'FLAWLESS!';
+  if (r.lastStands.some((ls) => ls.by === w)) sub = 'FROM 1 HP!';
+  else if (endHp > 0.9) sub = 'FLAWLESS!';
   else if (endHp < 0.15) sub = 'CLUTCH!';
   else if (worst < -0.35) sub = 'COMEBACK!';
   out.push({

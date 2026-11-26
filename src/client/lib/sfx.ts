@@ -233,6 +233,11 @@ export const sfx = {
     tone(800, 60, 0.9, 'square', 0.05, 0.05);
     noise(0.6, 0.2, 3000);
   },
+  lastStand: () => {
+    noise(0.9, 0.6, 700);
+    tone(70, 30, 0.9, 'square', 0.25);
+    [880, 660, 880, 660].forEach((f, i) => tone(f, f, 0.12, 'square', 0.08, 0.35 + i * 0.16));
+  },
   crash: () => {
     tone(300, 40, 0.5, 'square', 0.14);
     noise(0.8, 0.3, 900, 0.05);
