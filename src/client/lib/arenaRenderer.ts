@@ -1534,7 +1534,7 @@ export const createRenderer = (
           g.strokeStyle = '#3cf0ec';
           g.lineWidth = 1;
           g.beginPath();
-          g.arc(Math.round(x), Math.round(y), Math.max(SW, SH) * 0.62, 0, Math.PI * 2);
+          g.arc(Math.round(x), Math.round(y), Math.max(0, Math.max(SW), SH) * 0.62, 0, Math.PI * 2);
           g.stroke();
           g.globalAlpha = 1;
         }
@@ -1629,7 +1629,7 @@ export const createRenderer = (
           g.strokeStyle = Math.floor(t * 6) % 2 === 0 ? '#ffd23f' : '#ffffff';
           g.lineWidth = 1;
           g.beginPath();
-          g.arc(Math.round(x), Math.round(y), SW * 0.75 + Math.sin(t * 3) * 2, 0, Math.PI * 2);
+          g.arc(Math.round(x), Math.round(y), Math.max(0, SW * 0.75 + Math.sin(t * 3) * 2), 0, Math.PI * 2);
           g.stroke();
         } else {
           if (Math.floor(t * 3) % 2 === 0) {
@@ -2108,11 +2108,12 @@ export const createRenderer = (
         ringFx.splice(k, 1);
         continue;
       }
+      if (age < 0) continue; // a delayed second ring
       g.globalAlpha = 1 - age / 5;
       g.strokeStyle = '#ffd23f';
       g.lineWidth = 1;
       g.beginPath();
-      g.arc(Math.round(rf.x), Math.round(rf.y), 4 + age * 4, 0, Math.PI * 2);
+      g.arc(Math.round(rf.x), Math.round(rf.y), Math.max(0, 4 + age * 4), 0, Math.PI * 2);
       g.stroke();
       g.globalAlpha = 1;
     }

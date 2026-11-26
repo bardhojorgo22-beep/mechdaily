@@ -182,6 +182,7 @@ export const BattleView = ({
     let last = performance.now();
     let hold = 0; // hit-stop: sim time pauses, effects keep moving
     const started = performance.now();
+    let drawFailed = false;
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -193,7 +194,14 @@ export const BattleView = ({
         tickRef.current = Math.min(result.ticks, tickRef.current + dt * TICKS_PER_SECOND * speedRef.current * slow);
         setTick(tickRef.current);
       }
-      const busy = renderer.draw(tickRef.current, dt);
+      // a bad frame must never freeze the fight: log it once and keep playing
+      let busy = false;
+      try {
+        busy = renderer.draw(tickRef.current, dt);
+      } catch (e) {
+        if (!drawFailed) console.error('frame failed', e);
+        drawFailed = true;
+      }
       hold = Math.max(hold, renderer.takeFreeze() / Math.max(1, speedRef.current));
       if (tickRef.current < result.ticks || busy) raf = requestAnimationFrame(loop);
     };

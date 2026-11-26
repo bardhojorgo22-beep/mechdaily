@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         game: fileURLToPath(new URL('./game.html', import.meta.url)),
         battle: fileURLToPath(new URL('./battle.html', import.meta.url)),
+        stress: fileURLToPath(new URL('./stress.html', import.meta.url)),
       },
     },
   },
