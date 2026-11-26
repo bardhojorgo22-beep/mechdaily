@@ -14,7 +14,8 @@
     "prettier": "prettier --write .",
     "test:types": "tsc --build",
     "test:unit": "tsx --test \"tests/**/*.test.ts\"",
-    "balance": "tsx tools/balance.ts"
+    "balance": "tsx tools/balance.ts",
+    "test:loop": "esbuild tools/looptest/run.ts --bundle --platform=node --format=esm --alias:@devvit/web/server=./tools/looptest/devvit-mock.ts --outfile=node_modules/.looptest.mjs --log-level=error && node node_modules/.looptest.mjs"
   },
   "engines": {
     "node": ">=24.0.0"
