@@ -19,6 +19,7 @@ export type ShotEvent = {
   blocked: boolean;
   crit?: boolean; // charged sniper shot
   dodged?: boolean; // missed because the target was mid quick-boost
+  stagger?: boolean; // a big ranged hit stopped a charging target in its tracks
 };
 
 /** Once-per-fight pilot chip special moves. */
@@ -100,6 +101,7 @@ type MechState = {
   qbUntil: number; // dodge window from a quick boost
   ob: boolean; // overboosting
   obReady: number; // tick when overboost can fire again
+  staggerImmune: number; // tick until which this mech can't be staggered again
   threat: number; // tick when a big enemy shot was telegraphed
 };
 
@@ -131,6 +133,7 @@ const newState = (s: MechStats, x: number, y: number, seedOffset: number): MechS
   qbUntil: 0,
   ob: false,
   obReady: 30,
+  staggerImmune: 0,
   threat: -99,
 });
 
@@ -209,16 +212,19 @@ const desiredRange = (m: MechState, foe: MechState, arena: Arena, tick: number, 
   return want;
 };
 
+/** Stacked armor has diminishing returns, so nothing gets close to immune. */
+const soften = (a: number) => a * (1 - a * 0.6);
+
 const armorAgainst = (target: MechStats, type: MountedWeapon['type']) => {
   switch (type) {
     case 'kinetic':
-      return target.armorK;
+      return soften(target.armorK);
     case 'energy':
-      return target.armorE;
+      return soften(target.armorE);
     case 'explosive':
-      return (target.armorK + target.armorE) * 0.3;
+      return soften((target.armorK + target.armorE) * 0.3);
     case 'melee':
-      return target.armorK * 0.5;
+      return soften(target.armorK * 0.5);
   }
 };
 
@@ -478,7 +484,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
     }
 
     // ── firing (resolved simultaneously) ──
-    const pending: { target: 0 | 1; dmg: number; kx: number; ky: number }[] = [];
+    const pending: { target: 0 | 1; dmg: number; kx: number; ky: number; stagger: number }[] = [];
     for (let i = 0; i < 2; i++) {
       const me = mechs[i]!;
       const foe = mechs[1 - i]!;
@@ -528,6 +534,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
 
         let dmg = 0;
         let blocked = false;
+        let staggerFlag = false;
         if (hit) {
           dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.86; // braced
@@ -547,11 +554,24 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
               blocked = true;
             }
           }
+          // stopping power: a big ranged hit stops a charging mech in its tracks
+          const charging = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.2;
+          staggerFlag = false;
+          const staggerTicks =
+            wp.type !== 'melee' &&
+            (charging || dist < 220) &&
+            wp.damage * DAMAGE_SCALE >= 120 &&
+            tick >= foe.staggerImmune &&
+            !active(foe, 'turtle')
+              ? Math.min(9, Math.round(3 + (wp.damage * DAMAGE_SCALE * 4) / Math.max(40, foe.s.weight) / 8))
+              : 0;
+          staggerFlag = staggerTicks > 0;
           // knockback: big, slow hits shove the target; heavy mechs barely budge
           const kb = { kinetic: 1, energy: 0.5, explosive: 2.2, melee: 3 }[wp.type];
           const push = Math.min(170, (dmg * kb * 18) / Math.max(30, foe.s.weight));
           const d = dist || 1;
           pending.push({
+            stagger: staggerTicks,
             target: i === 0 ? 1 : 0,
             dmg,
             kx: ((foe.x - me.x) / d) * push,
@@ -569,12 +589,20 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           blocked,
           ...(crit ? { crit: true } : {}),
           ...(!hit && foe.qbUntil > tick ? { dodged: true } : {}),
+          ...(hit && staggerFlag ? { stagger: true } : {}),
         });
       });
     }
     for (const p of pending) {
       const t = mechs[p.target]!;
       t.hp -= p.dmg;
+      if (p.stagger > 0) {
+        t.planted = Math.max(t.planted, p.stagger);
+        t.ob = false;
+        t.vx *= 0.3;
+        t.vy *= 0.3;
+        t.staggerImmune = tick + p.stagger + 18;
+      }
       if (!active(t, 'turtle')) {
         t.vx += p.kx;
         t.vy += p.ky;

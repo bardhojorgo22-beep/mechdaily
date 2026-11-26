@@ -51,6 +51,7 @@ export const findHighlights = (r: BattleResult): Highlight[] => {
       else if (ev.dmg >= 420)
         push({ t: ev.t, by: ev.by, text: 'MASSIVE HIT!', sub: `${ev.dmg} damage`, tier: 2, focus: other }, 6);
       else if (ev.dmg >= 260) push({ t: ev.t, by: ev.by, text: 'BIG HIT!', sub: `${ev.dmg}`, tier: 1, focus: other });
+      if (ev.stagger) push({ t: ev.t, by: ev.by, text: 'STAGGERED!', tier: 1, focus: other }, 25);
       if (ev.blocked && ev.dmg > 0 && ev.dmg < 80 && ev.type !== 'kinetic') {
         push({ t: ev.t, by: other, text: 'SHIELD WALL!', tier: 1, focus: other }, 60);
       }

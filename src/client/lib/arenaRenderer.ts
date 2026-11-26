@@ -433,6 +433,7 @@ export const createRenderer = (
     { until: 0, dir: 0 },
   ];
   const pieces: Piece[] = [];
+  const dazedUntil = [0, 0];
   const brokenUp = [false, false];
   const vel = [
     { x: 0, y: 0, ratio: 0 },
@@ -704,6 +705,7 @@ export const createRenderer = (
       const big = ev.dmg > 140;
       flashUntil[victim] = t + 1.2;
       flinch[victim] = { until: t + (big ? 1.4 : 0.8), dir: foe.x >= me.x ? 1 : -1 };
+      if (ev.stagger) dazedUntil[victim] = t + 7;
       if (!quiet) freeze = Math.max(freeze, ev.dmg > 300 ? 0.13 : big ? 0.07 : ev.type === 'melee' ? 0.05 : 0);
       if (ev.blocked) {
         shieldUntil[victim] = t + 2;
@@ -1014,6 +1016,17 @@ export const createRenderer = (
         const critEv = result.events.find((e) => e.by === i && e.crit && e.t >= charge.t);
         if (critEv && t < critEv.t)
           line(x, y - 4, other.x, other.y - 2, Math.floor(t * 4) % 2 === 0 ? '#e4572e' : '#ff9b7a');
+      }
+      if (t < dazedUntil[i]!) {
+        // little stars circling the head
+        for (let k = 0; k < 3; k++) {
+          const a = t * 1.3 + (k * 6.283) / 3;
+          const sx = Math.round(x + Math.cos(a) * 9);
+          const sy = Math.round(y - SH / 2 - 2 + Math.sin(a) * 3);
+          g.fillStyle = k % 2 ? '#ffffff' : '#ffd23f';
+          g.fillRect(sx - 1, sy, 3, 1);
+          g.fillRect(sx, sy - 1, 1, 3);
+        }
       }
       if (t < shieldUntil[i]!) {
         g.strokeStyle = Math.floor(t * 6) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
