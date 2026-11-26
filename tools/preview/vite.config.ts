@@ -17,7 +17,10 @@ export default defineConfig({
     outDir: '/tmp/preview-dist',
     emptyOutDir: true,
     rollupOptions: {
-      input: { game: fileURLToPath(new URL('./game.html', import.meta.url)) },
+      input: {
+        game: fileURLToPath(new URL('./game.html', import.meta.url)),
+        battle: fileURLToPath(new URL('./battle.html', import.meta.url)),
+      },
     },
   },
 });

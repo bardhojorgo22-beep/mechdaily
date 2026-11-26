@@ -5,7 +5,7 @@ import { MechArt } from '../components/MechArt';
 
 // Turns the vector mech into a crunchy low-res pixel sprite.
 // Each art pixel is about PIXEL css pixels on screen.
-export const PIXEL = 2.5;
+export const PIXEL = 2;
 
 const cache = new Map<string, Promise<HTMLCanvasElement>>();
 
