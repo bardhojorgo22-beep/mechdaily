@@ -556,7 +556,6 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           }
           // stopping power: a big ranged hit stops a charging mech in its tracks
           const charging = (foe.vx * (me.x - foe.x) + foe.vy * (me.y - foe.y)) / Math.max(1, dist) > foe.s.speed * 0.2;
-          staggerFlag = false;
           const staggerTicks =
             wp.type !== 'melee' &&
             (charging || dist < 220) &&
