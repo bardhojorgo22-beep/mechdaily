@@ -21,8 +21,8 @@ export type Arena = {
 };
 
 const base: Omit<Arena, 'id' | 'name' | 'blurb'> = {
-  width: 1000,
-  height: 600,
+  width: 1300,
+  height: 780,
   legSpeed: {},
   heatGen: 1,
   cooling: 1,
@@ -88,16 +88,16 @@ export const ARENAS: Arena[] = [
     id: 'alley',
     name: 'Narrow Alley',
     blurb: 'Tiny map. Nowhere to run.',
-    width: 520,
-    height: 320,
+    width: 700,
+    height: 420,
   },
   {
     ...base,
     id: 'plains',
     name: 'Salt Flats',
     blurb: 'Huge open map. Long guns rule.',
-    width: 1600,
-    height: 900,
+    width: 2000,
+    height: 1150,
   },
   {
     ...base,

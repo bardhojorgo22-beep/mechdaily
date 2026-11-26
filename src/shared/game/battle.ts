@@ -138,29 +138,56 @@ const usable = (m: MechState, i: number) => {
 };
 
 /** The distance this pilot wants to fight at. */
-const desiredRange = (m: MechState, arena: Arena): number => {
-  const ranges: { min: number; max: number }[] = [];
+const desiredRange = (m: MechState, arena: Arena, tick: number, idx: number): number => {
+  const ranged: { min: number; max: number; dps: number }[] = [];
+  let meleeIdx = -1;
+  let meleeDps = 0;
   m.s.weapons.forEach((wp, i) => {
-    if (usable(m, i)) ranges.push({ min: wp.minRange, max: reach(m, wp, arena) });
+    if (!usable(m, i)) return;
+    if (wp.type === 'melee') {
+      meleeIdx = i;
+      meleeDps = wp.damage / wp.cooldown;
+      return;
+    }
+    ranged.push({ min: wp.minRange, max: reach(m, wp, arena), dps: wp.damage / wp.cooldown });
   });
-  if (ranges.length === 0) return 0; // out of ammo: charge and hope
-  const maxes = ranges.map((r) => r.max).sort((a, b) => a - b);
-  const longest = maxes[maxes.length - 1]!;
-  const shortest = maxes[0]!;
-  const minNeeded = Math.max(...ranges.map((r) => r.min));
+  // Melee pilots blade-run: lunge in when the blade is ready, back off while it recharges.
+  const bestRangedDps = Math.max(0, ...ranged.map((r) => r.dps));
+  const lunger =
+    m.s.behavior === 'rush' || m.s.behavior === 'berserk' || m.s.behavior === 'flank' || meleeDps > bestRangedDps * 1.3;
+  if (meleeIdx >= 0 && lunger && m.cooldown[meleeIdx]! <= 4) return 60;
+  if (ranged.length === 0) return 60;
+
+  // Fight at the main (highest damage) weapon's sweet spot, not the shortest gun's.
+  const main = ranged.reduce((a, b) => (b.dps > a.dps ? b : a));
+  const longest = Math.max(...ranged.map((r) => r.max));
+  const minNeeded = Math.max(...ranged.map((r) => r.min));
+  const sweet = Math.max(main.min + 40, main.max * 0.68);
+  let want: number;
   switch (m.s.behavior) {
     case 'rush':
+      want = Math.min(main.max * 0.85, Math.max(260, sweet * 0.6));
+      break;
     case 'berserk':
-      return shortest * 0.55;
+      want = Math.min(main.max * 0.85, Math.max(230, sweet * 0.55));
+      break;
     case 'kite':
-      return Math.max(longest * 0.85, minNeeded + 40);
+      want = Math.max(longest * 0.85, minNeeded + 40);
+      break;
     case 'sniper':
-      return Math.max(longest * 0.92, minNeeded + 40);
+      want = Math.max(longest * 0.92, minNeeded + 40);
+      break;
     case 'turtle':
-      return longest * 0.7;
+      want = sweet * 0.95;
+      break;
     case 'flank':
-      return maxes[Math.floor(maxes.length / 2)]! * 0.6;
+      want = sweet * 0.8;
+      break;
   }
+  // Ebb and flow: the preferred distance breathes in and out over ~8s.
+  const phase = ((tick + idx * 37) % 80) / 40 - 1; // -1..1 triangle-ish
+  const breathe = 1 + 0.18 * (Math.abs(phase) * 2 - 1);
+  return Math.max(200, Math.min(main.max * 0.95, want * breathe));
 };
 
 const armorAgainst = (target: MechStats, type: MountedWeapon['type']) => {
@@ -245,7 +272,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const ux = dx / dist;
       const uy = dy / dist;
-      const want = desiredRange(me, arena);
+      const want = desiredRange(me, arena, tick, i);
       const band = 30;
 
       // ── pilot chip special: once per fight ──
@@ -330,7 +357,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           tx = -tx;
           ty = -ty;
         }
-        const nearWall = me.x < 90 || me.x > W - 90 || me.y < 70 || me.y > H - 70;
+        const nearWall = me.x < 120 || me.x > W - 120 || me.y < 90 || me.y > H - 90;
         if (radial < 0 && nearWall) orbit = Math.max(orbit, 0.95);
         let mx = ux * radial + tx * orbit;
         let my = uy * radial + ty * orbit;
@@ -401,6 +428,18 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
       me.y = clamp(ny, 20, H - 20);
       if (me.x !== nx) me.vx = 0;
       if (me.y !== ny) me.vy = 0;
+      // personal space: mechs bump off each other instead of overlapping
+      {
+        const sx = me.x - foe.x;
+        const sy = me.y - foe.y;
+        const sd = Math.sqrt(sx * sx + sy * sy) || 1;
+        const space = 100;
+        if (sd < space) {
+          const shove = (space - sd) * 5;
+          me.vx += (sx / sd) * shove;
+          me.vy += (sy / sd) * shove;
+        }
+      }
       const sp = Math.sqrt(me.vx * me.vx + me.vy * me.vy);
       me.moving = sp > 8;
       me.moveFrac = clamp(sp / Math.max(1, me.s.speed), 0, 1.5);
@@ -469,7 +508,6 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         if (hit) {
           dmg = wp.damage * DAMAGE_SCALE * (wp.type === 'energy' ? arena.energyDamage : 1);
           if (foe.s.behavior === 'turtle' && !foe.moving) dmg *= 0.86; // braced
-          if (foe.s.behavior === 'rush') dmg *= 1.08; // reckless
           dmg *= me.dmgMult;
           if (crit) dmg *= 3.5;
           if (active(me, 'berserk')) dmg *= 1.15;
