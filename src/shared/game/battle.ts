@@ -173,11 +173,31 @@ const desiredRange = (m: MechState, foe: MechState, arena: Arena, tick: number, 
   const maxD = Math.min(1500, Math.sqrt(arena.width * arena.width + arena.height * arena.height) * 0.8);
   const myHp = Math.max(1, m.hp);
   const foeHp = Math.max(1, foe.hp);
+  // Melee-heavy builds commit: shield up, charge, land the hit.
+  const meleeDps = m.s.weapons.reduce(
+    (a, wp, i) => (wp.type === 'melee' && usable(m, i) ? a + wp.damage / wp.cooldown : a),
+    0
+  );
+  const allDps = m.s.weapons.reduce((a, wp, i) => (usable(m, i) ? a + wp.damage / wp.cooldown : a), 0);
+  if (meleeDps > 0 && meleeDps >= allDps * 0.45) {
+    m.want = 50;
+    m.wantUntil = tick + 5;
+    return 50;
+  }
   const cands: { d: number; score: number }[] = [];
   for (let d = 60; d <= maxD; d += 40) {
-    const mine = dpsAt(m, foe, d, arena) / foeHp;
+    const myDps = dpsAt(m, foe, d, arena);
+    // Hiding out of range is never a plan: only distances where I can hurt them count.
+    if (myDps <= 0) continue;
+    const mine = myDps / foeHp;
     const theirs = dpsAt(foe, m, d, arena) / myHp;
     cands.push({ d, score: mine - theirs * 0.9 });
+  }
+  if (cands.length === 0) {
+    // nothing in range anywhere (out of ammo etc.): close in and hope
+    m.want = 60;
+    m.wantUntil = tick + 5;
+    return 60;
   }
   const best = cands.reduce((a, b) => (b.score > a.score ? b : a));
   // "good enough" distances: within reach of the best score
@@ -462,7 +482,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
         const sx = me.x - foe.x;
         const sy = me.y - foe.y;
         const sd = Math.sqrt(sx * sx + sy * sy) || 1;
-        const space = 100;
+        const space = 60;
         if (sd < space) {
           const shove = (space - sd) * 5;
           me.vx += (sx / sd) * shove;
