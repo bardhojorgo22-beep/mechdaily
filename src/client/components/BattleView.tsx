@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Arena } from '../../shared/game/arenas';
 import { TICKS_PER_SECOND, type BattleResult } from '../../shared/game/battle';
 import type { Build } from '../../shared/game/mech';
-import { RES_W, SPRITE_W, THEMES, createRenderer, frameAt } from '../lib/arenaRenderer';
+import { BOSS_SPRITE_W, RES_W, SPRITE_W, THEMES, createRenderer, frameAt } from '../lib/arenaRenderer';
 import { isMuted, onMuteChange, setMuted, sfx } from '../lib/sfx';
 import { mechSprite } from '../lib/sprite';
 import { PixelMech } from './PixelMech';
@@ -16,6 +16,10 @@ type Props = {
   arena: Arena;
   tags?: [string, string];
   onDone?: () => void;
+  /** Which side is a raid boss (drawn bigger). */
+  bossSide?: 0 | 1 | null;
+  /** Replaces the default "X wins" card when the fight ends. */
+  footer?: ReactNode;
 };
 
 /** White silhouette of a sprite, for hit flashes. */
@@ -33,7 +37,16 @@ const whiteOf = (src: HTMLCanvasElement) => {
   return c;
 };
 
-export const BattleView = ({ result, builds, labels, arena, tags = ['YOU', 'FOE'], onDone }: Props) => {
+export const BattleView = ({
+  result,
+  builds,
+  labels,
+  arena,
+  tags = ['YOU', 'FOE'],
+  onDone,
+  bossSide = null,
+  footer,
+}: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [speed, setSpeed] = useState(1);
   const [tick, setTick] = useState(0);
@@ -57,12 +70,12 @@ export const BattleView = ({ result, builds, labels, arena, tags = ['YOU', 'FOE'
   const H = Math.round((RES_W * arena.height) / arena.width);
 
   useEffect(() => {
-    Promise.all(builds.map((b) => mechSprite(b, SPRITE_W)))
+    Promise.all(builds.map((b, i) => mechSprite(b, i === bossSide ? BOSS_SPRITE_W : SPRITE_W)))
       .then((cs) => {
         sprites.current = cs.map((c) => ({ normal: c, white: whiteOf(c) }));
       })
       .catch(() => undefined);
-  }, [builds]);
+  }, [builds, bossSide]);
 
   // intro countdown
   useEffect(() => {
@@ -90,7 +103,8 @@ export const BattleView = ({ result, builds, labels, arena, tags = ['YOU', 'FOE'
       arena,
       sprites,
       () => tagsRef.current,
-      () => speedRef.current
+      () => speedRef.current,
+      bossSide
     );
     if (!renderer) return;
     let raf = 0;
@@ -111,7 +125,7 @@ export const BattleView = ({ result, builds, labels, arena, tags = ['YOU', 'FOE'
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [result, builds, arena]);
+  }, [result, builds, arena, bossSide]);
 
   const fr = frameAt(result, tick);
   const secs = Math.floor(tick / TICKS_PER_SECOND);
@@ -217,6 +231,15 @@ export const BattleView = ({ result, builds, labels, arena, tags = ['YOU', 'FOE'
           >
             {muted ? '🔇' : '🔊'}
           </button>
+        </div>
+      ) : footer ? (
+        <div className="sticker p-3 text-center">
+          {footer}
+          {onDone && (
+            <button className="btn bg-sun mt-3 w-full" onClick={onDone}>
+              Continue
+            </button>
+          )}
         </div>
       ) : (
         <div className="sticker p-3 text-center">

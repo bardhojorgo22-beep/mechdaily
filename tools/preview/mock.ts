@@ -39,6 +39,19 @@ const init = {
     pilot: i ? '' : 'someone',
     build: b,
   })),
+  raid: {
+    bossId: 'x',
+    hp: 61200,
+    max: 88000,
+    killedBy: null,
+    attemptsLeft: 2,
+    myDamage: 4120,
+    top: [
+      { username: 'DunhillGri', damage: 4120 },
+      { username: 'other', damage: 3300 },
+    ],
+    factions: { foundry: 1000, tide: 4120, static: 0 },
+  },
   last: {
     day: '2026-11-26',
     dayNumber: 1,
@@ -65,6 +78,16 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
         { username: 'DunhillGri', wins: 5 },
         { username: 'other', wins: 3 },
       ],
+    });
+  if (url.startsWith('/api/raid'))
+    return json({
+      type: 'raid',
+      seed: 'raid:2026-11-27:u1:2',
+      attempt: 2,
+      damage: 3870,
+      hp: 57330,
+      max: 88000,
+      lastHit: false,
     });
   if (url.startsWith('/api/')) return json({ ok: true, entryCount: 15, streak: 4, faction: 'tide' });
   return realFetch(input, initArg);

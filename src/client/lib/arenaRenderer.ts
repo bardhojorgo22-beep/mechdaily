@@ -9,6 +9,7 @@ import { sfx } from './sfx';
 
 export const RES_W = 360;
 export const SPRITE_W = 42;
+export const BOSS_SPRITE_W = 68;
 const SPRITE_H = Math.round((SPRITE_W * 220) / 200);
 
 type Theme = { floor: string; speck: string; dark: string; text: string };
@@ -298,8 +299,11 @@ export const createRenderer = (
     current: { normal: HTMLCanvasElement; white: HTMLCanvasElement }[];
   },
   getTags: () => [string, string],
-  getSpeed: () => number
+  getSpeed: () => number,
+  bossSide: 0 | 1 | null = null
 ): Renderer | null => {
+  const sw = [0, 1].map((i) => (i === bossSide ? BOSS_SPRITE_W : SPRITE_W));
+  const sh = sw.map((w) => Math.round((w * 220) / 200));
   const W = RES_W;
   const H = Math.round((RES_W * arena.height) / arena.width);
   canvas.width = W;
@@ -410,13 +414,15 @@ export const createRenderer = (
     // (eased so mechs passing each other glide instead of snapping).
     {
       const rawDx = pos[1]!.x - pos[0]!.x;
-      const gap = SPRITE_W * 0.7;
+      const gap = ((sw[0]! + sw[1]!) / 2) * 0.7;
       const target = Math.abs(rawDx) < gap ? ((rawDx >= 0 ? 1 : -1) * (gap - Math.abs(rawDx))) / 2 : 0;
       const step = 90 * dt * Math.max(1, getSpeed());
       sepOffset += Math.max(-step, Math.min(step, target - sepOffset));
       pos[0]!.x = Math.max(SPRITE_W / 2, Math.min(W - SPRITE_W / 2, pos[0]!.x - sepOffset));
       pos[1]!.x = Math.max(SPRITE_W / 2, Math.min(W - SPRITE_W / 2, pos[1]!.x + sepOffset));
     }
+    // keep whole sprites (incl. name tags) inside the arena
+    for (let i = 0; i < 2; i++) pos[i]!.y = Math.max(sh[i]! / 2 + 14, Math.min(H - sh[i]! / 2 - 1, pos[i]!.y));
     const hopAt = (i: number, tt: number) => {
       // reverse-joint legs move in visible hops: a little parabola every 0.45s
       if (legTypes[i] !== 'reverse' || !fr[i]!.moving) return 0;
@@ -587,11 +593,11 @@ export const createRenderer = (
       const p = pos[i]!;
       // steam when hot, dust when walking
       if (m.heat > 85 && rng.chance(0.35))
-        spawn(p.x + (rng.next() - 0.5) * 10, p.y - SPRITE_H * 0.3, 1, ['#f4f0e6', '#c9c4b8'], 8, 0.9, 2, 0, -1, 0.3, 1);
+        spawn(p.x + (rng.next() - 0.5) * 10, p.y - sh[i]! * 0.3, 1, ['#f4f0e6', '#c9c4b8'], 8, 0.9, 2, 0, -1, 0.3, 1);
       if (m.moving && rng.chance(0.3))
         spawn(
           p.x + (rng.next() - 0.5) * 8,
-          p.y + SPRITE_H * 0.42,
+          p.y + sh[i]! * 0.42,
           1,
           [theme.speck, theme.dark],
           6,
@@ -662,6 +668,8 @@ export const createRenderer = (
     // mechs, back to front
     const order = pos[0]!.y < pos[1]!.y ? [0, 1] : [1, 0];
     for (const i of order) {
+      const SW = sw[i]!;
+      const SH = sh[i]!;
       const m = fr[i]!;
       const p = pos[i]!;
       const other = pos[1 - i]!;
@@ -675,16 +683,16 @@ export const createRenderer = (
       const y = Math.round(p.y);
       const shadowW = Math.max(12, 24 - Math.round(hop));
       g.fillStyle = 'rgba(27,26,23,0.28)';
-      g.fillRect(x - shadowW / 2, y + SPRITE_H / 2 - 3, shadowW, 3);
-      g.fillRect(x - shadowW / 2 + 3, y + SPRITE_H / 2 - 4, shadowW - 6, 1);
+      g.fillRect(x - shadowW / 2, y + SH / 2 - 3, shadowW, 3);
+      g.fillRect(x - shadowW / 2 + 3, y + SH / 2 - 4, shadowW - 6, 1);
       if (leg === 'hover') {
         g.fillStyle = Math.floor(t * 3) % 2 === 0 ? 'rgba(60,240,236,0.5)' : 'rgba(60,240,236,0.25)';
-        g.fillRect(x - 8, y + SPRITE_H / 2 - 5, 16, 1);
+        g.fillRect(x - 8, y + SH / 2 - 5, 16, 1);
       }
       // landing puff at the end of each hop
       if (leg === 'reverse' && m.moving && hop < 1.2 && hopAt(i, lastT) >= 1.2) {
-        spawn(x - 5, y + SPRITE_H / 2 - 2, 2, [theme.speck, theme.dark], 10, 0.4, 2, -0.5, -0.2, 0.4);
-        spawn(x + 5, y + SPRITE_H / 2 - 2, 2, [theme.speck, theme.dark], 10, 0.4, 2, 0.5, -0.2, 0.4);
+        spawn(x - 5, y + SH / 2 - 2, 2, [theme.speck, theme.dark], 10, 0.4, 2, -0.5, -0.2, 0.4);
+        spawn(x + 5, y + SH / 2 - 2, 2, [theme.speck, theme.dark], 10, 0.4, 2, 0.5, -0.2, 0.4);
       }
       const sp = sprites.current[i];
       const act = specialActive(i);
@@ -700,25 +708,20 @@ export const createRenderer = (
             g.globalAlpha = 0.35 - k * 0.05;
             g.translate(pt.x, pt.y);
             if (other.x < p.x) g.scale(-1, 1);
-            g.drawImage(sp.white, -SPRITE_W / 2, -SPRITE_H / 2);
+            g.drawImage(sp.white, -SW / 2, -SH / 2);
             g.restore();
           });
         }
       } else trail[i] = [];
       if (act && act.kind === 'berserk' && Math.floor(t * 3) % 2 === 0) {
         g.fillStyle = 'rgba(228,87,46,0.35)';
-        g.fillRect(x - SPRITE_W / 2 - 2, y - SPRITE_H / 2 - 2, SPRITE_W + 4, SPRITE_H + 4);
+        g.fillRect(x - SW / 2 - 2, y - SH / 2 - 2, SW + 4, SH + 4);
       }
       g.save();
       g.translate(x, y + bobY);
       if (other.x < p.x) g.scale(-1, 1);
       if (m.hp <= 0) g.globalAlpha = 0.35;
-      if (sp)
-        g.drawImage(
-          t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0 ? sp.white : sp.normal,
-          -SPRITE_W / 2,
-          -SPRITE_H / 2
-        );
+      if (sp) g.drawImage(t < flashUntil[i]! && Math.floor(t * 4) % 2 === 0 ? sp.white : sp.normal, -SW / 2, -SH / 2);
       else {
         g.fillStyle = '#888';
         g.fillRect(-8, -12, 16, 24);
@@ -728,7 +731,7 @@ export const createRenderer = (
       if (act && act.kind === 'turtle') {
         g.strokeStyle = Math.floor(t * 4) % 2 === 0 ? '#3cf0ec' : '#bffcfb';
         g.lineWidth = 1;
-        g.strokeRect(x - SPRITE_W / 2 - 3.5, y - SPRITE_H / 2 - 3.5, SPRITE_W + 7, SPRITE_H + 7);
+        g.strokeRect(x - SW / 2 - 3.5, y - SH / 2 - 3.5, SW + 7, SH + 7);
       }
       if (act && act.kind === 'kite' && rng.chance(0.5)) {
         spawn(
@@ -766,7 +769,7 @@ export const createRenderer = (
       g.textAlign = 'center';
       g.textBaseline = 'top';
       const tw = Math.ceil(g.measureText(tag).width) + 4;
-      const ty = y - SPRITE_H / 2 - 11;
+      const ty = y - SH / 2 - 11;
       g.fillStyle = '#1b1a17';
       g.fillRect(x - Math.ceil(tw / 2) - 1, ty - 1, tw + 2, 10);
       g.fillStyle = i === 0 ? '#ffc914' : '#f8f4ec';
@@ -974,7 +977,7 @@ export const createRenderer = (
       const a = (t - land) / 8;
       if (a < 0 || a > 1) continue;
       const jx = (((ev.t * 7 + (ev.slot === 'back' ? 3 : ev.slot === 'weaponL' ? 1 : 0)) % 5) - 2) * 8;
-      const yy = Math.round(to.y - SPRITE_H / 2 - 22 - a * 12);
+      const yy = Math.round(to.y - sh[1 - ev.by]! / 2 - 22 - a * 12);
       const txt = `${ev.dmg}`;
       g.fillStyle = '#1b1a17';
       for (const [ox, oy] of [
@@ -998,7 +1001,7 @@ export const createRenderer = (
       if (age < 0 || age > 14) continue;
       const p = pos[sp.by]!;
       const label = `${SPECIALS[sp.kind].name.toUpperCase()}!`;
-      const yy = Math.round(p.y - SPRITE_H / 2 - 34 - Math.min(age, 4));
+      const yy = Math.round(p.y - sh[sp.by]! / 2 - 34 - Math.min(age, 4));
       const w2 = Math.ceil(g.measureText(label).width) + 6;
       if (age < 10 || Math.floor(t * 4) % 2 === 0) {
         g.fillStyle = '#1b1a17';
@@ -1016,7 +1019,7 @@ export const createRenderer = (
       if (age < 0 || age > 10) continue;
       const p = pos[1 - ev.by]!;
       g.fillStyle = Math.floor(t * 6) % 2 === 0 ? '#e4572e' : '#ffc914';
-      g.fillText('CRIT!', Math.round(p.x), Math.round(p.y - SPRITE_H / 2 - 46));
+      g.fillText('CRIT!', Math.round(p.x), Math.round(p.y - sh[1 - ev.by]! / 2 - 46));
     }
 
     if (arena.fog) {

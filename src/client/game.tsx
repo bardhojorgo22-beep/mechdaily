@@ -1,13 +1,14 @@
 import './fonts';
 import './index.css';
 
-import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { context, navigateTo, showToast } from '@devvit/web/client';
-import type { InitResponse, LeaderboardResponse, ResultsResponse } from '../shared/api';
+import type { InitResponse, LeaderboardResponse, RaidState, ResultsResponse } from '../shared/api';
 import { getArena, type Arena } from '../shared/game/arenas';
 import { simulateBattle, type BattleResult } from '../shared/game/battle';
 import { botsForDay } from '../shared/game/bots';
+import { bossForDay, simulateRaid } from '../shared/game/boss';
 import { FACTIONS, FACTION_IDS, type FactionId } from '../shared/game/factions';
 import { DEFAULT_BUILD, type Build, type Tax } from '../shared/game/mech';
 import { getPart } from '../shared/game/parts';
@@ -25,6 +26,9 @@ type Fight = {
   tags: [string, string];
   arena: Arena;
   key: string;
+  bossSide?: 0 | 1;
+  footer?: ReactNode;
+  back: Screen;
 };
 type Screen = 'home' | 'garage' | 'practice' | 'battle' | 'bracket' | 'factions';
 
@@ -65,6 +69,83 @@ const SoundCheck = () => {
     >
       Sound check: {status}
     </button>
+  );
+};
+
+const RaidCard = ({
+  raid,
+  day,
+  canAttack,
+  busy,
+  onAttack,
+}: {
+  raid: RaidState;
+  day: string;
+  canAttack: boolean;
+  busy: boolean;
+  onAttack: () => void;
+}) => {
+  const boss = bossForDay(day);
+  const pct = raid.max > 0 ? raid.hp / raid.max : 0;
+  const dead = raid.hp <= 0;
+  const blocks = 20;
+  const filled = Math.ceil(pct * blocks);
+  return (
+    <div
+      className="sticker p-3"
+      style={{ background: dead ? '#e8e2d4' : '#2b2d34', color: dead ? '#1b1a17' : '#efe8da' }}
+    >
+      <div className="flex items-baseline justify-between">
+        <div className="text-[11px] font-semibold opacity-70">DAILY BOSS · EVERYONE vs ONE</div>
+        <div className="text-[11px] opacity-70">
+          {raid.attemptsLeft} attack{raid.attemptsLeft === 1 ? '' : 's'} left
+        </div>
+      </div>
+      <div className="flex gap-3 items-center mt-1">
+        <PixelMech build={boss.build} size={86} bob={!dead} className={dead ? 'opacity-40' : ''} />
+        <div className="flex-1 min-w-0">
+          <div className="font-display text-xl leading-none">{boss.title}</div>
+          <div className="text-xs mt-1 opacity-80">
+            {dead ? `Destroyed. Final blow: u/${raid.killedBy ?? '?'}` : boss.taunt}
+          </div>
+          <div className="flex gap-[2px] mt-2" aria-label={`Boss HP ${raid.hp} of ${raid.max}`}>
+            {Array.from({ length: blocks }, (_, i) => (
+              <div
+                key={i}
+                className="h-3 flex-1"
+                style={{ background: i < filled ? (pct > 0.3 ? '#e4572e' : '#ffc914') : 'rgba(239,232,218,0.15)' }}
+              />
+            ))}
+          </div>
+          <div className="text-[11px] mt-1 opacity-80">
+            {raid.hp.toLocaleString()} / {raid.max.toLocaleString()} HP
+            {raid.myDamage > 0 ? ` · you: ${raid.myDamage.toLocaleString()}` : ''}
+          </div>
+        </div>
+      </div>
+      {raid.top.length > 0 && (
+        <div className="text-[11px] mt-2 opacity-80">
+          Top damage:{' '}
+          {raid.top
+            .slice(0, 3)
+            .map((p, i) => `${i + 1}. u/${p.username} ${p.damage.toLocaleString()}`)
+            .join(' · ')}
+        </div>
+      )}
+      {!dead && (
+        <button
+          className="btn bg-rust text-white w-full mt-2"
+          disabled={!canAttack || busy || raid.attemptsLeft <= 0}
+          onClick={onAttack}
+        >
+          {!canAttack
+            ? 'Log in to attack'
+            : raid.attemptsLeft <= 0
+              ? 'Out of attacks — back tomorrow'
+              : 'Attack the boss'}
+        </button>
+      )}
+    </div>
   );
 };
 
@@ -230,8 +311,56 @@ export const App = () => {
       tags: ['YOU', 'FOE'],
       arena,
       key: seed,
+      back: 'practice',
     });
     setScreen('battle');
+  };
+
+  const attackBoss = async () => {
+    if (!data) return;
+    setBusy(true);
+    try {
+      const r = await api.raid(build);
+      const boss = bossForDay(data.day);
+      const result = simulateRaid(data.day, arena, tax, build, r.seed);
+      setData({
+        ...data,
+        raid: {
+          ...data.raid,
+          hp: r.hp,
+          attemptsLeft: Math.max(0, data.raid.attemptsLeft - 1),
+          myDamage: data.raid.myDamage + r.damage,
+          killedBy: r.lastHit ? data.username : data.raid.killedBy,
+        },
+      });
+      setFight({
+        result,
+        builds: [build, boss.build],
+        labels: [data.username ? `u/${data.username}` : 'you', 'daily boss'],
+        tags: ['YOU', 'BOSS'],
+        arena,
+        key: r.seed,
+        bossSide: 1,
+        back: 'home',
+        footer: (
+          <>
+            <div className="font-display text-2xl leading-none stamp" style={{ color: '#c0392b' }}>
+              {r.lastHit ? 'FINAL BLOW!' : `${r.damage.toLocaleString()} damage`}
+            </div>
+            <div className="text-xs mt-2 text-mute">
+              {r.lastHit
+                ? `You took down ${boss.title}. Your faction gets the credit.`
+                : `${boss.title} has ${r.hp.toLocaleString()} HP left. Everyone's hits add up.`}
+            </div>
+          </>
+        ),
+      });
+      setScreen('battle');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Attack failed');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openBracket = async (day: string) => {
@@ -372,6 +501,16 @@ export const App = () => {
               </div>
             )}
 
+            {!isOldPost && (
+              <RaidCard
+                raid={data.raid}
+                day={data.day}
+                canAttack={!!data.username}
+                busy={busy}
+                onAttack={() => void attackBoss()}
+              />
+            )}
+
             {data.last && (
               <div className="sticker p-3">
                 <div className="text-[11px] font-semibold text-mute">DAY {data.last.dayNumber} RESULT</div>
@@ -475,7 +614,9 @@ export const App = () => {
             labels={fight.labels}
             tags={fight.tags}
             arena={fight.arena}
-            onDone={() => setScreen(fight.tags[0] === 'YOU' ? 'practice' : 'bracket')}
+            bossSide={fight.bossSide ?? null}
+            footer={fight.footer}
+            onDone={() => setScreen(fight.back)}
           />
         )}
 
@@ -565,6 +706,7 @@ const Bracket = ({
       tags: ['A', 'B'],
       arena,
       key: seed,
+      back: 'bracket',
     });
     onShow();
   };

@@ -28,6 +28,27 @@ export type LastResult = {
   mine: { wins: number; rounds: number; champion: boolean } | null;
 };
 
+export type RaidState = {
+  bossId: string;
+  hp: number;
+  max: number;
+  killedBy: string | null;
+  attemptsLeft: number;
+  myDamage: number;
+  top: { username: string; damage: number }[];
+  factions: Record<FactionId, number>;
+};
+
+export type RaidResponse = {
+  type: 'raid';
+  seed: string;
+  attempt: number;
+  damage: number;
+  hp: number;
+  max: number;
+  lastHit: boolean;
+};
+
 export type InitResponse = {
   type: 'init';
   username: string | null;
@@ -49,6 +70,7 @@ export type InitResponse = {
   profile: Profile;
   champions: Champion[];
   last: LastResult | null;
+  raid: RaidState;
 };
 
 export type SaveRequest = { build: Build };

@@ -3,6 +3,7 @@ import type { Champion, LastResult, Profile } from '../../shared/api';
 import { arenaForDay, dayKey, getArena } from '../../shared/game/arenas';
 import { FACTIONS, FACTION_IDS, isFactionId, type FactionId } from '../../shared/game/factions';
 import { validateBuild, type Build, type Tax } from '../../shared/game/mech';
+import { ensureRaid, settleRaid } from './raid';
 import { computeTax, runTournament, winsFor, type Entrant, type TournamentResult } from '../../shared/game/tournament';
 
 // ── keys ────────────────────────────────────────────────
@@ -295,6 +296,13 @@ export const runRollover = async (): Promise<string> => {
     }
   }
 
+  // raid
+  const raid = await settleRaid(day);
+  for (const f of FACTION_IDS) {
+    const pts = raid.points[f];
+    if (pts) await redis.hIncrBy(K.factionTotal, f, pts);
+  }
+
   // champion
   const champ = t.entrants[t.champion]!;
   const champions = await getChampions();
@@ -318,6 +326,7 @@ export const runRollover = async (): Promise<string> => {
   await redis.set(K.day, tomorrow);
   await redis.set(K.dayNumber, String(tomorrowNumber));
   await redis.hSet(K.dayNumberOf, { [tomorrow]: String(tomorrowNumber) });
+  await ensureRaid(tomorrow, humans.length);
 
   let newPostId: string | null = null;
   try {
@@ -341,6 +350,7 @@ export const runRollover = async (): Promise<string> => {
       `Final: ${champ.build.name} beat ${loser.build.name}.`,
       ``,
       `${humans.length} pilot${humans.length === 1 ? '' : 's'} entered. Faction points: ${pts}`,
+      ...(raid.line ? [``, raid.line] : []),
       ``,
       `Tomorrow's arena: **${arenaForDay(tomorrow).name}**. Open the post to watch the bracket.`,
     ].join('\n');

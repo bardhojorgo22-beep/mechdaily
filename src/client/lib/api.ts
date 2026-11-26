@@ -1,4 +1,4 @@
-import type { EnterResponse, InitResponse, LeaderboardResponse, ResultsResponse } from '../../shared/api';
+import type { EnterResponse, InitResponse, LeaderboardResponse, RaidResponse, ResultsResponse } from '../../shared/api';
 import type { FactionId } from '../../shared/game/factions';
 import type { Build } from '../../shared/game/mech';
 
@@ -34,6 +34,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ faction }),
     }),
+  raid: (build: Build) => call<RaidResponse>('/api/raid', { method: 'POST', body: JSON.stringify({ build }) }),
   results: (day: string) => call<ResultsResponse>(`/api/results/${day}`),
   leaderboard: () => call<LeaderboardResponse>('/api/leaderboard'),
 };

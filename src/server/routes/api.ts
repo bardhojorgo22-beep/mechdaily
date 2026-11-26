@@ -5,11 +5,13 @@ import type {
   ErrorResponse,
   InitResponse,
   LeaderboardResponse,
+  RaidResponse,
   ResultsResponse,
 } from '../../shared/api';
 import { arenaForDay } from '../../shared/game/arenas';
 import { isFactionId } from '../../shared/game/factions';
 import { validateBuild } from '../../shared/game/mech';
+import { attackBoss, raidState } from '../core/raid';
 import {
   dayNumberOf,
   dayPost,
@@ -73,6 +75,7 @@ api.get('/init', async (c) => {
       },
       champions: await getChampions(),
       last: await lastResultFor(day, userId),
+      raid: await raidState(day, userId, username),
     };
     return c.json(res);
   } catch (e) {
@@ -103,6 +106,28 @@ api.post('/enter', async (c) => {
     type: 'enter',
     entryCount: r.entryCount,
     streak: r.streak,
+  };
+  return c.json(res);
+});
+
+api.post('/raid', async (c) => {
+  const { userId, username } = context;
+  if (!userId || !username) return c.json(err('Log in to fight the boss.'), 401);
+  const body: unknown = await c.req.json().catch(() => null);
+  const build = validateBuild(body && typeof body === 'object' ? Reflect.get(body, 'build') : null);
+  if (!build) return c.json(err('That build is not valid.'), 400);
+  const { day } = await ensureState();
+  const profile = await getProfile(userId);
+  const r = await attackBoss(day, await getTax(day), userId, username, profile.faction, build);
+  if (!r.ok) return c.json(err(r.message), 429);
+  const res: RaidResponse = {
+    type: 'raid',
+    seed: r.seed,
+    attempt: r.attempt,
+    damage: r.damage,
+    hp: r.hp,
+    max: r.max,
+    lastHit: r.lastHit,
   };
   return c.json(res);
 });
