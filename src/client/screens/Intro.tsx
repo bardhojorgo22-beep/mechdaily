@@ -11,7 +11,7 @@ export const Intro = ({ onWatch, onSkip }: { onWatch: () => void; onSkip: () => 
       <div className="flex gap-2">
         <span className="tag bg-sun">1</span>
         <span>
-          <b>Build a mech</b> from 10 parts. Every part changes how it moves and fights.
+          <b>Build a mech</b> with 10 slots and 78 parts to pick from. Every part changes how it moves and fights.
         </span>
       </div>
       <div className="flex gap-2">
