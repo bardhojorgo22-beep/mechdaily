@@ -3,6 +3,7 @@ import { context } from '@devvit/web/server';
 import type {
   EnterResponse,
   ErrorResponse,
+  HangarResponse,
   InitResponse,
   LeaderboardResponse,
   RaidResponse,
@@ -32,6 +33,8 @@ import {
   getProfile,
   getResults,
   getSavedBuild,
+  getHangar,
+  setHangar,
   getTax,
   joinFaction,
   lastResultFor,
@@ -98,6 +101,7 @@ api.get('/init', async (c) => {
       raid: await raidState(day, userId, username),
       reel: await getReel(),
       synergiesFound: await getFound(),
+      hangar: userId ? await getHangar(userId) : [],
     };
     return c.json(res);
   } catch (e) {
@@ -116,6 +120,16 @@ api.post('/save', async (c) => {
   const { day } = await ensureState();
   const discovered = context.username ? await discover(build, context.username, day) : [];
   const res: SaveResponse = { type: 'save', ok: true, discovered };
+  return c.json(res);
+});
+
+api.post('/hangar', async (c) => {
+  const { userId } = context;
+  if (!userId) return c.json(err('Log in to save mechs.'), 401);
+  const body: unknown = await c.req.json().catch(() => null);
+  const hangar = await setHangar(userId, body && typeof body === 'object' ? Reflect.get(body, 'hangar') : null);
+  if (!hangar) return c.json(err('Could not save that list of mechs.'), 400);
+  const res: HangarResponse = { type: 'hangar', hangar };
   return c.json(res);
 });
 

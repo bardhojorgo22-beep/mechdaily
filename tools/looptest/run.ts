@@ -104,6 +104,13 @@ check((await req('/init')).json.reel?.length === 2, 'fight reel shows both share
 // hidden synergies: first to equip gets credit + a comment, second gets nothing new
 as('joani', post1);
 const hunter = build('Hunter', { weaponR: 'r-bow', weaponL: 'lw-knuckle' });
+{
+  const h = await req('/hangar', { hangar: [hunter, { ...hunter, name: 'Two' }] });
+  check(h.status === 200 && h.json.hangar?.length === 2, 'hangar saves two mechs');
+  check((await req('/init')).json.hangar?.[1]?.name === 'Two', 'init returns the hangar');
+  check((await req('/hangar', { hangar: [{ junk: 1 }] })).status === 400, 'hangar rejects junk');
+  check((await req('/hangar', { hangar: Array(9).fill(hunter) })).status === 400, 'hangar caps at 8');
+}
 const d1 = await req('/save', { build: hunter });
 check(
   JSON.stringify(d1.json.discovered) === '["hunter"]',

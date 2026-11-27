@@ -1,6 +1,6 @@
 import { context, reddit, redis } from '@devvit/web/server';
 import { buildTitle } from '../../shared/game/title';
-import type { Champion, LastResult, Profile } from '../../shared/api';
+import { HANGAR_MAX, type Champion, type LastResult, type Profile } from '../../shared/api';
 import { arenaForDay, dayKey, getArena } from '../../shared/game/arenas';
 import { FACTIONS, FACTION_IDS, isFactionId, type FactionId } from '../../shared/game/factions';
 import { validateBuild, type Build, type Tax } from '../../shared/game/mech';
@@ -21,6 +21,7 @@ const K = {
   factionDay: (day: string) => `faction:day:${day}`,
   factionTotal: 'faction:total',
   build: (userId: string) => `build:${userId}`,
+  hangar: (userId: string) => `hangar:${userId}`,
   user: (userId: string) => `user:${userId}`,
   leaderboard: 'leaderboard:wins',
   champions: 'champions',
@@ -130,6 +131,25 @@ export const getSavedBuild = async (userId: string): Promise<Build | null> =>
 
 export const saveBuild = async (userId: string, build: Build) => {
   await redis.set(K.build(userId), JSON.stringify(build));
+};
+
+/** Saved mechs a player can load back into the garage. */
+export const getHangar = async (userId: string): Promise<Build[]> => {
+  const raw = parseJson(await redis.get(K.hangar(userId)));
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((b) => validateBuild(b))
+    .filter((b): b is Build => b !== null)
+    .slice(0, HANGAR_MAX);
+};
+
+export const setHangar = async (userId: string, list: unknown): Promise<Build[] | null> => {
+  if (!Array.isArray(list) || list.length > HANGAR_MAX) return null;
+  const builds = list.map((b) => validateBuild(b));
+  if (builds.some((b) => b === null)) return null;
+  const clean = builds.filter((b): b is Build => b !== null);
+  await redis.set(K.hangar(userId), JSON.stringify(clean));
+  return clean;
 };
 
 const flair = async (username: string, text: string, faction: FactionId | null) => {

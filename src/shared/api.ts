@@ -89,6 +89,8 @@ export type InitResponse = {
   raid: RaidState;
   reel: SharedFight[];
   synergiesFound: Partial<Record<SynergyId, { by: string; day: string }>>;
+  /** Mechs this player saved to come back to. */
+  hangar: Build[];
 };
 
 export type SaveResponse = { type: 'save'; ok: boolean; discovered: SynergyId[] };
@@ -115,6 +117,9 @@ export type SharedFight = ShareRequest & {
 export type ShareResponse = { type: 'share'; fight: SharedFight; left: number };
 
 export type SaveRequest = { build: Build };
+export const HANGAR_MAX = 8;
+export type HangarRequest = { hangar: Build[] };
+export type HangarResponse = { type: 'hangar'; hangar: Build[] };
 export type EnterResponse = {
   type: 'enter';
   entryCount: number;

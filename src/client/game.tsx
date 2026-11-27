@@ -325,6 +325,16 @@ export const App = () => {
     return () => clearTimeout(id);
   }, [build, celebrate]);
 
+  const updateHangar = (list: Build[]) => {
+    if (!data) return;
+    const prev = data.hangar;
+    setData({ ...data, hangar: list });
+    api.hangar(list).catch((e: unknown) => {
+      setData((d) => (d ? { ...d, hangar: prev } : d));
+      showToast(e instanceof Error ? e.message : 'Could not save');
+    });
+  };
+
   const leaveGarage = () => {
     setScreen('home');
     saveBackup(build);
@@ -785,6 +795,8 @@ export const App = () => {
             onTestFire={testFire}
             found={data.synergiesFound}
             username={data.username}
+            hangar={data.hangar ?? []}
+            onHangar={updateHangar}
           />
         )}
 

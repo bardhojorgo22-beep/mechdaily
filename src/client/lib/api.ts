@@ -2,6 +2,7 @@ import type {
   ChallengeResponse,
   ChallengesResponse,
   EnterResponse,
+  HangarResponse,
   InitResponse,
   LeaderboardResponse,
   RaidResponse,
@@ -49,6 +50,8 @@ export const api = {
   challenge: (username: string, build: Build) =>
     call<ChallengeResponse>('/api/challenge', { method: 'POST', body: JSON.stringify({ username, build }) }),
   share: (req: ShareRequest) => call<ShareResponse>('/api/share', { method: 'POST', body: JSON.stringify(req) }),
+  hangar: (hangar: Build[]) =>
+    call<HangarResponse>('/api/hangar', { method: 'POST', body: JSON.stringify({ hangar }) }),
   challenges: () => call<ChallengesResponse>('/api/challenges'),
   results: (day: string) => call<ResultsResponse>(`/api/results/${day}`),
   leaderboard: () => call<LeaderboardResponse>('/api/leaderboard'),

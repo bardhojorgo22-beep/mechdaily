@@ -14,7 +14,7 @@ import { SPECIALS } from '../../shared/game/battle';
 import { fightingStyle } from '../../shared/game/style';
 import { SYNERGIES, SYNERGY_IDS, synergiesOf, type SynergyId } from '../../shared/game/synergies';
 import { buildTitle } from '../../shared/game/title';
-import type { InitResponse } from '../../shared/api';
+import { HANGAR_MAX, type InitResponse } from '../../shared/api';
 import { PixelMech } from '../components/PixelMech';
 import { sfx } from '../lib/sfx';
 
@@ -138,9 +138,116 @@ type Props = {
   onTestFire?: () => void;
   found?: InitResponse['synergiesFound'];
   username?: string | null;
+  /** Saved mechs, and a setter that persists the list. */
+  hangar?: Build[];
+  onHangar?: (list: Build[]) => void;
 };
 
-export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found = {}, username = null }: Props) => {
+const sameBuild = (a: Build, b: Build) =>
+  JSON.stringify(a.parts) === JSON.stringify(b.parts) && JSON.stringify(a.paint) === JSON.stringify(b.paint);
+
+/** Saved mechs: save the current one, tap one to load it back. */
+const Hangar = ({
+  build,
+  hangar,
+  onHangar,
+  onLoad,
+}: {
+  build: Build;
+  hangar: Build[];
+  onHangar: (l: Build[]) => void;
+  onLoad: (b: Build) => void;
+}) => {
+  const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  const existing = hangar.findIndex((b) => b.name.trim().toLowerCase() === build.name.trim().toLowerCase());
+  const savedAlready = hangar.some((b) => sameBuild(b, build) && b.name === build.name);
+  const full = hangar.length >= HANGAR_MAX && existing < 0;
+  const save = () => {
+    if (savedAlready || full) return;
+    const copy: Build = JSON.parse(JSON.stringify(build));
+    if (existing >= 0) onHangar(hangar.map((b, k) => (k === existing ? copy : b)));
+    else onHangar([...hangar, copy]);
+    sfx.click();
+  };
+  return (
+    <div className="sticker p-2">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-display font-black text-sm">SAVED MECHS</span>
+        <span className="text-[11px] text-mute">
+          {hangar.length}/{HANGAR_MAX}
+        </span>
+        <button className="btn bg-sun text-xs ml-auto whitespace-nowrap" disabled={savedAlready || full} onClick={save}>
+          {savedAlready
+            ? '✓ Saved'
+            : full
+              ? 'Hangar full'
+              : existing >= 0
+                ? `💾 Update “${hangar[existing]!.name}”`
+                : '💾 Save this mech'}
+        </button>
+      </div>
+      {hangar.length === 0 ? (
+        <div className="text-[11px] text-mute">
+          Save builds here to swap between them without remaking them. Same name = overwrite.
+        </div>
+      ) : (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {hangar.map((b, k) => {
+            const current = sameBuild(b, build) && b.name === build.name;
+            return (
+              <div
+                key={`${b.name}-${k}`}
+                className="relative shrink-0 border-2 border-ink p-1 flex flex-col items-center w-[76px] cursor-pointer"
+                style={{ background: current ? '#fff3b0' : '#f8f4ec' }}
+                onClick={() => {
+                  setConfirmDel(null);
+                  onLoad(JSON.parse(JSON.stringify(b)));
+                }}
+                title={`Load ${b.name}`}
+              >
+                <PixelMech build={b} size={52} />
+                <div className="text-[10px] font-semibold truncate w-full text-center">{b.name}</div>
+                <button
+                  className="absolute -top-2 -right-2 w-5 h-5 border-2 border-ink text-[10px] leading-none font-black"
+                  style={{
+                    background: confirmDel === k ? '#c0392b' : '#efe8da',
+                    color: confirmDel === k ? '#fff' : '#1b1a17',
+                  }}
+                  aria-label={`Delete ${b.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirmDel === k) {
+                      onHangar(hangar.filter((_, j) => j !== k));
+                      setConfirmDel(null);
+                    } else setConfirmDel(k);
+                  }}
+                >
+                  {confirmDel === k ? '?' : '✕'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {confirmDel !== null && (
+        <div className="text-[10px] text-rust mt-1">Tap the ? again to delete “{hangar[confirmDel]?.name}”.</div>
+      )}
+    </div>
+  );
+};
+
+export const Garage = ({
+  build,
+  arena,
+  tax,
+  onChange,
+  onBack,
+  onTestFire,
+  found = {},
+  username = null,
+  hangar = [],
+  onHangar,
+}: Props) => {
   const [tab, setTab] = useState<Tab>('weaponR');
   const st = useMemo(() => computeStats(build, arena, tax), [build, arena, tax]);
   const title = buildTitle(build, arena);
@@ -184,6 +291,8 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
           aria-label="Mech name"
         />
       </div>
+
+      {onHangar && <Hangar build={build} hangar={hangar} onHangar={onHangar} onLoad={onChange} />}
 
       <div className="sticker p-3 flex flex-wrap justify-center gap-3 items-center">
         <PixelMech key={partsKey} build={build} size={120} bob className="pop" />

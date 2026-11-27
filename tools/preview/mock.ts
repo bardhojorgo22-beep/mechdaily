@@ -60,6 +60,7 @@ const init = {
     ],
     factions: { foundry: 1000, tide: 4120, static: 0 },
   },
+  hangar: [],
   synergiesFound: { hunter: { by: 'DunhillGri', day: '2026-11-26' }, ghost: { by: 'someone', day: '2026-11-25' } },
   reel: [
     {
@@ -144,6 +145,11 @@ window.fetch = async (input: RequestInfo | URL, initArg?: RequestInit) => {
         },
       ],
     });
+  if (url.startsWith('/api/hangar')) {
+    const body: unknown = JSON.parse(typeof initArg?.body === 'string' ? initArg.body : '{}');
+    const hangar: unknown = body && typeof body === 'object' ? Reflect.get(body, 'hangar') : [];
+    return json({ type: 'hangar', hangar });
+  }
   if (url.startsWith('/api/share'))
     return json({ type: 'share', left: 4, fight: { ...init.reel[0], id: '3', headline: 'just shared' } });
   if (url.startsWith('/api/raid'))
