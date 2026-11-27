@@ -14,6 +14,7 @@ import { getPart } from '../../shared/game/parts';
 import type { MechLayer } from '../components/mechLayers';
 import { createRng } from '../../shared/game/rng';
 import { sfx } from './sfx';
+import { GRADE, crater, createAmbient, drawFloorTexture, makeVignette, slamCracks } from './arenaDecor';
 import type { Highlight } from './highlights';
 
 export const RES_W = 480;
@@ -410,7 +411,41 @@ export const createRenderer = (
   if (!fg) return null;
   fg.fillStyle = theme.floor;
   fg.fillRect(0, 0, W, H);
+  const anchors = drawFloorTexture(fg, arena.id, W, H, theme);
   drawProps(fg, arena, W, H, theme);
+  const ambient = createAmbient(arena.id, W, H, K, anchors);
+  const vignette = makeVignette(W, H);
+  const grade = GRADE[arena.id];
+  let wall = 0; // real seconds since the renderer started (intro camera, idle animation)
+  let impactFrame = 0; // seconds of inverted-color "impact frame" left
+  let lastImpactFrame = -9;
+  let letterbox = 0; // 0..1 cinematic bars
+  const rings: { x: number; y: number; age: number; max: number; r: number; color: string }[] = [];
+  const shockwave = (x: number, y: number, r: number, color = '#ffffff', max = 0.45) =>
+    rings.push({ x, y, age: 0, max, r: r * K, color });
+  // chunks of debris that arc through the air and stay on the floor where they land
+  const chunks: { x: number; y: number; z: number; vx: number; vy: number; vz: number; c: string; s: number }[] = [];
+  const debris = (x: number, y: number, n: number, colors: string[], power = 1) => {
+    for (let k = 0; k < n && chunks.length < 120; k++) {
+      const a = rng.next() * 6.283;
+      const v = (20 + rng.next() * 50) * power * K;
+      chunks.push({
+        x,
+        y,
+        z: 4,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v * 0.5,
+        vz: (40 + rng.next() * 70) * power * K,
+        c: rng.pick(colors),
+        s: rng.chance(0.3) ? 3 : 2,
+      });
+    }
+  };
+  const triggerImpactFrame = () => {
+    if (wall - lastImpactFrame < 2.5) return;
+    lastImpactFrame = wall;
+    impactFrame = 0.07;
+  };
 
   const scorch = (x: number, y: number, r: number) => {
     for (let i = 0; i < r * 5; i++) {
@@ -465,6 +500,27 @@ export const createRenderer = (
     { until: 0, px: 0 },
   ];
   const facing: (1 | -1)[] = [1, -1];
+  const turnAt = [-9, -9];
+  // where each mech's head sits in its sprite (for the blinking status light), found once per sprite
+  const headTop = new WeakMap<HTMLCanvasElement, { x: number; y: number } | null>();
+  const findHead = (img: HTMLCanvasElement) => {
+    if (headTop.has(img)) return headTop.get(img)!;
+    let found: { x: number; y: number } | null = null;
+    const c = img.getContext('2d');
+    if (c) {
+      const d = c.getImageData(0, 0, img.width, img.height).data;
+      const cx = Math.floor(img.width / 2);
+      outer: for (let y = 0; y < img.height; y++)
+        for (let x = cx - 6; x <= cx + 6; x++) {
+          if (d[(y * img.width + x) * 4 + 3]! > 0) {
+            found = { x: x - img.width / 2, y: y + 3 - img.height / 2 };
+            break outer;
+          }
+        }
+    }
+    headTop.set(img, found);
+    return found;
+  };
   const walked = [0, 0];
   const lastPos: { x: number; y: number }[] = [];
   let nextSpecial = 0;
@@ -663,6 +719,7 @@ export const createRenderer = (
 
   const draw = (t: number, dt: number): boolean => {
     curT = t;
+    wall += dt;
     const fr = frameAt(result, t);
     const pos = fr.map((m) => ({ x: m.x * sc, y: m.y * sc }));
     // Melee fights put mechs on top of each other; ease them apart visually
@@ -1083,6 +1140,22 @@ export const createRenderer = (
       if (BOOM_FX.has(fx)) addLight(at.x, at.y, big ? 70 : 50, '#ff9a3c', 0.55);
       else if (ev.crit || big) addLight(at.x, at.y, 40, lightColor(fx), 0.35);
       else if (fx !== 'saw' && fx !== 'minigun') addLight(at.x, at.y, 16, lightColor(fx), 0.14);
+      // ── extra juice: shockwaves, flying debris, the floor taking damage ──
+      const groundY = at.y + 12 * K;
+      if (BOOM_FX.has(fx) && fx !== 'hammer') {
+        shockwave(at.x, groundY, big ? 30 : 20, '#ffe2a8');
+        debris(at.x, groundY, big ? 10 : 5, [theme.dark, theme.speck, '#3d3a34', '#1b1a17']);
+        crater(fg, at.x, groundY, (big ? 7 : 5) * K, theme, () => rng.next());
+      } else if (fx === 'hammer') {
+        shockwave(at.x, groundY, 42, '#ffffff', 0.6);
+        shockwave(at.x, groundY, 26, '#ffd23f', 0.4);
+        debris(at.x, groundY, 14, [theme.dark, theme.speck, '#1b1a17'], 1.3);
+        slamCracks(fg, at.x, groundY, Math.round(16 * K), () => rng.next());
+      } else if (ev.crit || big) {
+        shockwave(at.x, at.y, big ? 22 : 16, lightColor(fx), 0.3);
+        debris(at.x, at.y, 4, ['#8a8478', '#d8d2c4', '#3d3a34'], 0.8); // armor flakes
+      }
+      if (ev.crit && ev.dmg >= 400) triggerImpactFrame();
       switch (fx) {
         case 'missiles':
           spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ff7a2f', '#c0392b', '#5b5148'], 34, 0.55, 2, 0, -0.2, 1, 1);
@@ -1224,8 +1297,23 @@ export const createRenderer = (
       if (m.heat < 60) heatWarned[i] = false;
       const p = pos[i]!;
       // steam when hot, dust when walking
-      if (m.heat > 85 && rng.chance(0.35))
-        spawn(p.x + (rng.next() - 0.5) * 10, p.y - sh[i]! * 0.3, 1, ['#f4f0e6', '#c9c4b8'], 8, 0.9, 2, 0, -1, 0.3, 1);
+      if (m.heat > 55 && rng.chance(dt * (m.heat > 85 ? 22 : 8))) {
+        // steam vents out of the back, harder the hotter it runs
+        const back = -facing[i]!;
+        spawn(
+          p.x + back * sw[i]! * 0.28,
+          p.y - sh[i]! * 0.25,
+          1,
+          ['#ffffff', '#f4f0e6', '#c9c4b8'],
+          10,
+          m.heat > 85 ? 1.1 : 0.7,
+          2,
+          back * 0.6,
+          -1,
+          0.3,
+          1.5
+        );
+      }
       if (m.moving && rng.chance(0.3))
         spawn(
           p.x + (rng.next() - 0.5) * 8,
@@ -1288,6 +1376,26 @@ export const createRenderer = (
         spawn(loser.x, loser.y, 22, ['#1b1a17', '#4a453d'], 40, 1.8, 2, 0, -0.3, 1, 1);
         spawn(loser.x, loser.y, 16, ['#6e675c', '#3d3a34', '#2a2823'], 10, 2.4, 3, 0, -0.6, 0.5, 2.5);
         scorch(loser.x, loser.y, 12);
+        crater(fg, loser.x, loser.y + 14 * K, 11 * K, theme, () => rng.next());
+        shockwave(loser.x, loser.y, 60, '#ffffff', 0.7);
+        shockwave(loser.x, loser.y + 10 * K, 40, '#ff9a3c', 0.9);
+        debris(loser.x, loser.y, 26, ['#3d3a34', '#1b1a17', '#8a8478', '#ff7a2f'], 1.6);
+        addLight(loser.x, loser.y, 110, '#ff9a3c', 1.4);
+        triggerImpactFrame();
+        // a few secondary pops as the wreck cooks off
+        for (let k = 1; k <= 4; k++)
+          setTimeout(
+            () => {
+              const bx = loser.x + (rng.next() - 0.5) * 30 * K;
+              const by = loser.y + (rng.next() - 0.5) * 16 * K;
+              spawn(bx, by, 14, ['#ffffff', '#ffd23f', '#ff7a2f', '#3d3a34'], 45, 0.6, 2, 0, -0.3, 1, 1.5);
+              addLight(bx, by, 40, '#ff9a3c', 0.4);
+              shockwave(bx, by, 14, '#ffe2a8', 0.3);
+              shake = Math.max(shake, 3);
+              if (!quiet) sfx.hit(true);
+            },
+            250 + k * 260 + rng.next() * 150
+          );
       }
       setTimeout(() => (result.winner === 0 || getTags()[0] !== 'YOU' ? sfx.win() : sfx.lose()), 650);
     }
@@ -1323,8 +1431,10 @@ export const createRenderer = (
     for (let i = 0; i < 2; i++) {
       const p = pos[i]!;
       const o = pos[1 - i]!;
+      const was = facing[i];
       if (o.x < p.x - 6) facing[i] = -1;
       else if (o.x > p.x + 6) facing[i] = 1;
+      if (was !== facing[i]) turnAt[i] = wall;
       const lp = lastPos[i];
       if (lp) walked[i] = walked[i]! + Math.hypot(p.x - lp.x, p.y - lp.y);
       lastPos[i] = { x: p.x, y: p.y };
@@ -1417,6 +1527,8 @@ export const createRenderer = (
         const flinchPx = t < fl.until ? Math.round(5 * ((fl.until - t) / 1.4) + 0.5) * fl.dir : 0;
         g.translate(x - facing[i]! * kickBack + flinchPx, y + bobY);
         if (facing[i] === -1) g.scale(-1, 1);
+        const turning = wall - turnAt[i]!;
+        if (turning < 0.16) g.scale(0.45 + (turning / 0.16) * 0.55, 1); // pivot when it turns around
         if (t < qbUntil[i]! && qbUntil[i]! - t > 2) g.scale(1.18, 0.88); // squash-and-stretch on the dash
         if (m.hp <= 0) g.globalAlpha = 0.35;
         const lsNow = result.lastStands.find((l) => l.by === i && t >= l.t);
@@ -1438,7 +1550,14 @@ export const createRenderer = (
           const lean = m.moving ? Math.max(-2, Math.min(5, Math.round(fwd * (v.ratio > 1.3 ? 5 : 3)))) : 0;
           const step = Math.floor(walked[i]! / 6) % 2;
           const walking = m.moving && (leg === 'biped' || leg === 'reverse' || leg === 'quad');
-          const torsoBob = walking && step === 1 ? -2 : 0;
+          // walking bob, or slow idle breathing when standing still
+          const torsoBob = walking
+            ? step === 1
+              ? -2
+              : 0
+            : !m.moving && Math.sin(wall * 2.4 + i * 1.9) > 0.35
+              ? -1
+              : 0;
           const aiming = t - lastShot[i]! < 14 ? -3 : 0;
           const kickOf = (slot: ShotEvent['slot']) => {
             const k = slotKick[i]![slot] - t;
@@ -1535,11 +1654,36 @@ export const createRenderer = (
               ox + lean + Math.sign(windR + windL) * Math.min(2, Math.abs(windR + windL) / 3),
               oy + torsoBob + crouch
             );
+          // blinking status light on the head
+          const head = L.body ? findHead(L.body) : null;
+          if (head && m.hp > 0) {
+            const ph = (wall + i * 0.6) % 1.3;
+            const danger = m.hp / Math.max(1, result.maxHp[i]!) < 0.3;
+            if (ph < (danger ? 0.65 : 0.18) || (danger && ph > 0.9 && ph < 1.0)) {
+              const hx = Math.round(lean + head.x);
+              const hy = Math.round(torsoBob + crouch + head.y);
+              const lc = danger ? '#ff4040' : i === 0 ? '#7dff6a' : '#ffd23f';
+              g.save();
+              g.globalCompositeOperation = 'lighter';
+              glow(hx + 1, hy + 1, 4 * K, lc, 0.5);
+              g.restore();
+              g.fillStyle = lc;
+              g.fillRect(hx, hy, 2, 2);
+            }
+          }
         }
         g.restore();
       }
 
       if (m.hp > 0) {
+        // hover jets: a flickering glow under hovering legs
+        if (leg === 'hover') {
+          g.save();
+          g.globalCompositeOperation = 'lighter';
+          glow(x, y + SH * 0.42, (7 + Math.sin(wall * 30) * 1.5) * K, '#3cf0ec', 0.35);
+          g.restore();
+          g.globalAlpha = 1;
+        }
         // battle damage: scorch marks and scratches pile up on the torso as HP drops,
         // then sparks and smoke when it's nearly done
         const hpK = m.hp / Math.max(1, result.maxHp[i]!);
@@ -2184,6 +2328,50 @@ export const createRenderer = (
       g.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);
     }
 
+    // shockwave rings
+    for (let k = rings.length - 1; k >= 0; k--) {
+      const r = rings[k]!;
+      r.age += dt;
+      if (r.age >= r.max) {
+        rings.splice(k, 1);
+        continue;
+      }
+      const p = r.age / r.max;
+      const rad = r.r * (1 - Math.pow(1 - p, 3));
+      g.globalAlpha = 1 - p;
+      g.strokeStyle = r.color;
+      g.lineWidth = Math.max(1, Math.round((1 - p) * 3 * K));
+      g.beginPath();
+      g.ellipse(Math.round(r.x), Math.round(r.y), Math.max(1, rad), Math.max(1, rad * 0.5), 0, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+    // debris chunks: arc through the air, bounce once, then become part of the floor
+    for (let k = chunks.length - 1; k >= 0; k--) {
+      const c = chunks[k]!;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.z += c.vz * dt;
+      c.vz -= 260 * K * dt;
+      if (c.z <= 0) {
+        if (c.vz < -60 * K) {
+          c.z = 0;
+          c.vz *= -0.35;
+          c.vx *= 0.5;
+          c.vy *= 0.5;
+        } else {
+          fg.fillStyle = c.c;
+          fg.fillRect(Math.round(c.x), Math.round(c.y), c.s - 1, c.s - 1);
+          chunks.splice(k, 1);
+          continue;
+        }
+      }
+      g.fillStyle = 'rgba(27,26,23,0.25)';
+      g.fillRect(Math.round(c.x), Math.round(c.y), c.s, 1);
+      g.fillStyle = c.c;
+      g.fillRect(Math.round(c.x), Math.round(c.y - c.z), c.s, c.s);
+    }
+
     // light pass: additive glows over everything drawn so far
     if (lights.length) {
       g.save();
@@ -2212,6 +2400,17 @@ export const createRenderer = (
         glow(p.x, p.y, p.size * 3, c, 0.25 * (p.life / p.max));
     }
     g.restore();
+
+    // weather and ambient life
+    const bolt = ambient.draw(g, dt, glow);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    if (bolt > 0) {
+      g.fillStyle = '#e8ecff';
+      g.globalAlpha = bolt * 0.35;
+      g.fillRect(0, 0, W, H);
+      g.globalAlpha = 1;
+    }
 
     // damage numbers (show when the hit lands)
     g.font = `${FONT}px Silkscreen, monospace`;
@@ -2393,7 +2592,20 @@ export const createRenderer = (
     g.restore();
 
     // ── camera ──
-    if (t > cam.until) cam.target = 1;
+    const intro = t <= 0 && wall < 2.3;
+    const ending = result.reason === 'ko' && t >= result.ticks - 6 && t - result.ticks < 30;
+    if (intro) {
+      // a quick look at each fighter before the wide shot
+      cam.target = wall < 1.6 ? 1.7 : 1;
+      cam.focus = wall < 0.8 ? 0 : 1;
+      cam.until = 0;
+    } else if (ending) {
+      cam.target = 1.45;
+      cam.focus = result.winner === 0 ? 1 : 0;
+      cam.until = t + 1;
+    } else if (t > cam.until) cam.target = 1;
+    const lbTarget = intro || ending ? 1 : 0;
+    letterbox += (lbTarget - letterbox) * Math.min(1, dt * 6);
     const f = pos[cam.focus]!;
     const k = Math.min(1, dt * (cam.target > cam.zoom ? 9 : 3));
     cam.zoom += (cam.target - cam.zoom) * k;
@@ -2417,11 +2629,40 @@ export const createRenderer = (
       ring -= dt * 1.6;
     }
 
+    // ── cinematic finishing: color grade, vignette, letterbox, impact frames ──
+    if (grade) {
+      out.globalCompositeOperation = 'soft-light';
+      out.globalAlpha = grade.a;
+      out.fillStyle = grade.tint;
+      out.fillRect(0, 0, W, H);
+      out.globalAlpha = 1;
+      out.globalCompositeOperation = 'source-over';
+    }
+    out.drawImage(vignette, 0, 0);
+    if (letterbox > 0.01) {
+      const bh = Math.round(H * 0.09 * letterbox);
+      out.fillStyle = '#0d0c0a';
+      out.fillRect(0, 0, W, bh);
+      out.fillRect(0, H - bh, W, bh);
+    }
+    if (impactFrame > 0) {
+      // one or two inverted frames, like a manga impact panel
+      out.globalCompositeOperation = 'difference';
+      out.fillStyle = '#ffffff';
+      out.fillRect(0, 0, W, H);
+      out.globalCompositeOperation = 'source-over';
+      impactFrame -= dt;
+    }
+
     lastT = t;
     return (
       particles.length > 0 ||
       lights.length > 0 ||
       pieces.length > 0 ||
+      chunks.length > 0 ||
+      rings.length > 0 ||
+      Math.abs(letterbox - lbTarget) > 0.01 ||
+      impactFrame > 0 ||
       shake > 0.2 ||
       flash > 0 ||
       Math.abs(cam.zoom - 1) > 0.01 ||
