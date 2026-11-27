@@ -246,7 +246,9 @@ export const computeStats = (build: Build, arena: Arena, tax: Tax = {}): MechSta
   // Heavier mechs are slower even under the limit.
   const massFactor = 1 / (1 + weight / 160);
   const speed = thrust * mobility * weightFactor * legSpeed * arena.speed * massFactor * 0.9;
-  const evasion = clamp((speed / 346) * legEvasion * (arena.evasion[legType] ?? 1), 0, 0.55);
+  // Faster = harder to hit, with diminishing returns so the very fastest builds can't dodge half the fight.
+  const rawEvasion = Math.max(0, (speed / 346) * legEvasion * (arena.evasion[legType] ?? 1));
+  const evasion = clamp(0.55 * (1 - Math.exp(-rawEvasion / 0.45)), 0, 0.55);
 
   // synergies that simply change part numbers
   const syns = synergiesOf(build.parts);
