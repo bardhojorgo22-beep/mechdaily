@@ -38,6 +38,7 @@ import {
   leaderboard,
   postDay,
   adoptPost,
+  ensureTodayPost,
   saveBuild,
 } from '../core/state';
 
@@ -61,6 +62,8 @@ api.get('/init', async (c) => {
       await adoptPost(postId, day);
       pDay = day;
     }
+    // today's post never got made (rate limit, outage): make it now
+    if (!(await dayPost(day))) await ensureTodayPost(day, dayNumber);
     pDay = pDay ?? day;
     if (userId && username) await rememberUser(userId, username);
     const profile = userId ? await getProfile(userId) : null;

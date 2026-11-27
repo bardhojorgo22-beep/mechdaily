@@ -72,6 +72,22 @@ export const getTax = async (day: string): Promise<Tax> => {
 export const postDay = async (postId: string): Promise<string | null> => (await redis.hGet(K.postDay, postId)) ?? null;
 export const dayPost = async (day: string): Promise<string | null> => (await redis.hGet(K.dayPost, day)) ?? null;
 
+/** If the new day's post failed to create (rate limits etc.), try again, at most every few minutes. */
+export const ensureTodayPost = async (day: string, dayNumber: number): Promise<string | null> => {
+  const existing = await dayPost(day);
+  if (existing) return existing;
+  const now = Date.now();
+  const last = Number((await redis.hGet(K.locks, `postretry:${day}`)) ?? '0');
+  if (now - last < 3 * 60_000) return null;
+  await redis.hSet(K.locks, { [`postretry:${day}`]: String(now) });
+  try {
+    return (await createDailyPost(day, dayNumber)).id;
+  } catch (err) {
+    console.error('retry: could not create daily post', err);
+    return null;
+  }
+};
+
 export const adoptPost = async (postId: string, day: string) => {
   await redis.hSet(K.postDay, { [postId]: day });
   await redis.hSet(K.dayPost, { [day]: postId });
@@ -265,7 +281,18 @@ export const runRollover = async (): Promise<string> => {
   const { day, dayNumber } = await ensureState();
   const got = await redis.hSetNX(K.locks, `rollover:${day}`, new Date().toISOString());
   if (!got) return `rollover for ${day} already done`;
+  try {
+    return await rolloverDay(day, dayNumber);
+  } catch (err) {
+    // never leave a day stuck: if anything failed before the day advanced, free it so it can run again
+    console.error('rollover failed', err);
+    const still = await redis.get(K.day);
+    if (still === day) await redis.hDel(K.locks, [`rollover:${day}`]);
+    return `Tournament failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 120);
+  }
+};
 
+const rolloverDay = async (day: string, dayNumber: number): Promise<string> => {
   const arena = getArena(arenaForDay(day).id);
   const tax = await getTax(day);
   const raw = await redis.hGetAll(K.entries(day));
@@ -340,7 +367,7 @@ export const runRollover = async (): Promise<string> => {
   try {
     newPostId = (await createDailyPost(tomorrow, tomorrowNumber)).id;
   } catch (err) {
-    console.error('could not create daily post', err);
+    console.error('could not create daily post (will retry when someone opens the game)', err);
   }
 
   // results comment on today's post

@@ -2,6 +2,8 @@
 type Ctx = { userId?: string; username?: string; postId?: string; subredditName?: string };
 export const context: Ctx = { subredditName: 'mechdaily_test' };
 export const log: string[] = [];
+/** Failure injection for tests. */
+export const failures = { post: 0, setKeyPrefix: '' };
 
 const str = new Map<string, string>();
 const hash = new Map<string, Map<string, string>>();
@@ -11,7 +13,13 @@ const Z = (k: string) => zs.get(k) ?? zs.set(k, new Map()).get(k)!;
 
 export const redis = {
   get: async (k: string) => str.get(k),
-  set: async (k: string, v: string) => void str.set(k, v),
+  set: async (k: string, v: string) => {
+    if (failures.setKeyPrefix && k.startsWith(failures.setKeyPrefix)) {
+      failures.setKeyPrefix = '';
+      throw new Error('redis write failed (injected)');
+    }
+    str.set(k, v);
+  },
   del: async (...ks: string[]) => ks.forEach((k) => (str.delete(k), hash.delete(k), zs.delete(k))),
   incrBy: async (k: string, n: number) => {
     const v = Number(str.get(k) ?? 0) + n;
@@ -49,6 +57,10 @@ export const redis = {
 let postN = 0;
 export const reddit = {
   submitCustomPost: async (o: { title?: string; postData?: unknown }) => {
+    if (failures.post > 0) {
+      failures.post--;
+      throw new Error('RATELIMIT (injected)');
+    }
     const id = `t3_post${++postN}`;
     log.push(`POST ${id}: ${o.title} ${JSON.stringify(o.postData ?? {})}`);
     return { id };

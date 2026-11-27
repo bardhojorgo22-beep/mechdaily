@@ -1,6 +1,6 @@
 import { api } from '../../src/server/routes/api';
 import { menu } from '../../src/server/routes/menu';
-import { context, log } from '@devvit/web/server';
+import { context, log, failures } from '@devvit/web/server';
 import { DEFAULT_BUILD } from '../../src/shared/game/mech';
 
 let fails = 0;
@@ -182,6 +182,29 @@ const orphan = await req('/init');
 check(
   orphan.json.postDay === orphan.json.day && orphan.json.todayPostId === 't3_post3',
   'stray post shows today, real post kept'
+);
+
+// 7. Reddit refuses the new day's post: the day still advances, and the post gets made on the next visit
+as('joani', 't3_post3');
+failures.post = 1;
+const rl: any = await (await menu.request('/run-tournament', { method: 'POST' })).json();
+check(/New post failed/.test(rl.showToast), `rollover survives a refused post: ${rl.showToast}`);
+const posts = log.filter((l) => l.startsWith('POST ')).length;
+as('friend1', 't3_post3');
+await req('/init');
+check(
+  log.filter((l) => l.startsWith('POST ')).length === posts + 1,
+  'missing post is created when someone opens the game'
+);
+
+// 8. a crash mid-tournament must not lock the day forever
+failures.setKeyPrefix = 'results:';
+const crash: any = await (await menu.request('/run-tournament', { method: 'POST' })).json();
+check(/failed/i.test(crash.showToast), `crash reported: ${crash.showToast}`);
+const retry: any = await (await menu.request('/run-tournament', { method: 'POST' })).json();
+check(
+  /done/.test(retry.showToast) && !/already/.test(retry.showToast),
+  `pressing again works after a crash: ${retry.showToast}`
 );
 
 console.log('\n── what Reddit would see ──');
