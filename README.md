@@ -17,7 +17,7 @@ Mech Daily is a daily auto-battler for Reddit, built on Devvit Web. You never co
 
 - **Hidden synergies.** 31 odd part combos secretly work together: 21 pairs, 5 pilot-chip combos and 5 legendary 3-part combos. **The first redditor in each subreddit to equip one gets credited by name in the comments.** The garage shows riddle hints for the ones nobody has found yet.
 - **No fixed meta.** Parts that were too popular yesterday get heavier today. The arena changes daily. Every part sits between roughly 45% and 55% win rate (checked with tens of thousands of simulated fights).
-- **Fights worth watching.** Armored Core-style movement (circle-strafing, quick-boost dodges, overboost charges), visible wind-ups, per-weapon sounds, hit-stop, slow-mo highlights, a Last Stand where a mech can survive a killing blow at 1 HP, and Sudden Death so stalemates end.
+- **Fights worth watching.** Weighty mech movement (circle-strafing, quick-boost dodges, overboost charges), visible wind-ups, per-weapon sounds, hit-stop, slow-mo highlights, a Last Stand where a mech can survive a killing blow at 1 HP, and Sudden Death so stalemates end.
 - **Built for a subreddit.** Three factions compete every day. The Fight Reel lets anyone share a great fight to the comments. Build titles ("Hunter Hit & Run", "Magnetic Tank") show up everywhere, so unusual builds get noticed.
 - **Fair replays.** Battles are deterministic: the server stores only seeds and results, and every client replays exactly the same fight.
 

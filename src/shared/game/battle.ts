@@ -485,7 +485,7 @@ export const simulateBattle = (a: Fighter, b: Fighter, arena: Arena, seed: strin
           });
         }
       }
-      // ── AC-style movement ──
+      // ── mech movement ──
       // Circle-strafe around the target at the preferred range, quick boost
       // sideways to dodge, overboost in a straight line to close big gaps.
       const by: 0 | 1 = i === 0 ? 0 : 1;
