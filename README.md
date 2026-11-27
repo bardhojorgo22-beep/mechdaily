@@ -6,7 +6,7 @@ Mech Daily is a daily auto-battler for Reddit, built on Devvit Web. You never co
 
 ## How to play
 
-1. **Open today's post** and build a mech in the garage. There are 10 slots (head, core, arms, legs, booster, generator, right hand, left hand, back, pilot chip) and 78 parts. Every part is a trade-off: weight, power, heat, range, armor.
+1. **Open today's post** and build a mech in the garage. There are 10 slots (head, core, arms, legs, booster, generator, right hand, left hand, back, pilot chip) and 78 parts. Every part is a trade-off: weight, power, heat, range, armor. Save up to 8 favourite builds in your **hangar** and swap between them any time.
 2. **Check today's arena.** It rotates daily (Fog Bank, Mudflats, Narrow Alley, Low Gravity…), and each one changes what works.
 3. **Practice** against Easy, Medium and Hard bots, or past champions. Use **🎯 Test fire** to see what a weapon actually does.
 4. **Enter the bracket.** At 00:00 UTC every entry fights in an automatic single-elimination tournament. The results get posted in the comments, the champion gets flair, and a new day starts with a new post.
@@ -18,6 +18,7 @@ Mech Daily is a daily auto-battler for Reddit, built on Devvit Web. You never co
 - **Hidden synergies.** 31 odd part combos secretly work together: 21 pairs, 5 pilot-chip combos and 5 legendary 3-part combos. **The first redditor in each subreddit to equip one gets credited by name in the comments.** The garage shows riddle hints for the ones nobody has found yet.
 - **No fixed meta.** Parts that were too popular yesterday get heavier today. The arena changes daily. Every part sits between roughly 45% and 55% win rate (checked with tens of thousands of simulated fights).
 - **Fights worth watching.** Weighty mech movement (circle-strafing, quick-boost dodges, overboost charges), visible wind-ups, per-weapon sounds, hit-stop, slow-mo highlights, a Last Stand where a mech can survive a killing blow at 1 HP, and Sudden Death so stalemates end.
+- **Nine arenas with their own look.** Rain and lightning in Ion Storm, embers in Heatwave, drifting fog, steaming manholes. Explosions leave craters and debris on the floor, mechs smoke and spark as they take damage, and KOs get a cinematic close-up.
 - **Built for a subreddit.** Three factions compete every day. The Fight Reel lets anyone share a great fight to the comments. Build titles ("Hunter Hit & Run", "Magnetic Tank") show up everywhere, so unusual builds get noticed.
 - **Fair replays.** Battles are deterministic: the server stores only seeds and results, and every client replays exactly the same fight.
 
