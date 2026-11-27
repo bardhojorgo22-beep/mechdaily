@@ -15,6 +15,48 @@ const svgMarkup = (build: Build, only?: MechLayer): string => {
   return out.includes('xmlns=') ? out : out.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
 };
 
+const INK: [number, number, number] = [27, 26, 23];
+const isInk = (d: Uint8ClampedArray, i: number) => d[i]! === INK[0] && d[i + 1]! === INK[1] && d[i + 2]! === INK[2];
+
+/**
+ * Makes flat pixel art read as solid metal: a 1px ink outline around the silhouette,
+ * light from the top-left (bright rims, shadowed undersides) and a soft top-to-bottom falloff.
+ */
+const shade = (d: Uint8ClampedArray, w: number, h: number) => {
+  const src = new Uint8ClampedArray(d);
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3]! > 0;
+  const paint = (x: number, y: number) => {
+    if (!solid(x, y)) return false;
+    const i = (y * w + x) * 4;
+    return !(src[i] === INK[0] && src[i + 1] === INK[1] && src[i + 2] === INK[2]);
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (!solid(x, y)) {
+        // outline: an empty pixel touching the silhouette becomes ink
+        if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) {
+          d[i] = INK[0];
+          d[i + 1] = INK[1];
+          d[i + 2] = INK[2];
+          d[i + 3] = 255;
+        }
+        continue;
+      }
+      if (isInk(src, i)) continue;
+      let f = 1.06 - (y / h) * 0.16; // soft falloff toward the feet
+      const rimTop = !paint(x, y - 1) || !paint(x - 1, y);
+      const rimBottom = !paint(x, y + 1) || !paint(x + 1, y);
+      if (rimTop && !rimBottom) f += 0.22;
+      else if (rimBottom && !rimTop) f -= 0.24;
+      // a faint diagonal sheen across big flat plates
+      if (!rimTop && !rimBottom && (x + y) % 9 === 0) f += 0.06;
+      for (let c = 0; c < 3; c++)
+        d[i + c] = Math.max(0, Math.min(255, Math.round(src[i + c]! * f + (f > 1 ? (f - 1) * 60 : 0))));
+    }
+  }
+};
+
 const rasterize = (markup: string, w: number): Promise<HTMLCanvasElement> =>
   new Promise((resolve, reject) => {
     const h = Math.round((w * 220) / 200);
@@ -43,6 +85,7 @@ const rasterize = (markup: string, w: number): Promise<HTMLCanvasElement> =>
           d[i + 3] = 255;
         }
       }
+      shade(d, w, h);
       g.putImageData(data, 0, 0);
       resolve(c);
     };

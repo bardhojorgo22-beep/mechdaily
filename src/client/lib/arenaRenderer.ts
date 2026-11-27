@@ -16,9 +16,12 @@ import { createRng } from '../../shared/game/rng';
 import { sfx } from './sfx';
 import type { Highlight } from './highlights';
 
-export const RES_W = 360;
-export const SPRITE_W = 42;
-export const BOSS_SPRITE_W = 68;
+export const RES_W = 480;
+/** How much finer than the original 360-wide arena we draw: everything sized in pixels scales by this. */
+export const K = RES_W / 360;
+export const SPRITE_W = 56;
+export const BOSS_SPRITE_W = 90;
+const FONT = Math.round(8 * K);
 const SPRITE_H = Math.round((SPRITE_W * 220) / 200);
 
 type Theme = { floor: string; speck: string; dark: string; text: string };
@@ -434,11 +437,11 @@ export const createRenderer = (
   ) => {
     for (let i = 0; i < n; i++) {
       const a = rng.next() * 6.283;
-      const v = spd * (0.35 + rng.next());
-      const vx = Math.cos(a) * v * spread + dirX * spd;
-      const vy = Math.sin(a) * v * spread + dirY * spd;
+      const v = spd * K * (0.35 + rng.next());
+      const vx = Math.cos(a) * v * spread + dirX * spd * K;
+      const vy = Math.sin(a) * v * spread + dirY * spd * K;
       const l = life * (0.6 + rng.next() * 0.6);
-      particles.push({ x, y, vx, vy, life: l, max: l, colors, size, grow });
+      particles.push({ x, y, vx, vy, life: l, max: l, colors, size: size * K, grow: grow * K });
     }
   };
 
@@ -527,6 +530,70 @@ export const createRenderer = (
   const ringFx: { x: number; y: number; t: number }[] = [];
   const lastPunch = [-99, -99];
   const bursts: { x: number; y: number; t: number; word: string; big: boolean }[] = [];
+
+  // ── lighting: soft additive glows that light up the floor around flashes ──
+  const lights: { x: number; y: number; r: number; color: string; life: number; max: number }[] = [];
+  const glowCache = new Map<string, HTMLCanvasElement>();
+  const glowSprite = (color: string) => {
+    let c = glowCache.get(color);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const gg = c.getContext('2d')!;
+      const grad = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, color);
+      grad.addColorStop(0.35, color + '88');
+      grad.addColorStop(1, color + '00');
+      gg.fillStyle = grad;
+      gg.fillRect(0, 0, 64, 64);
+      glowCache.set(color, c);
+    }
+    return c;
+  };
+  const addLight = (x: number, y: number, r: number, color: string, life: number) => {
+    if (lights.length > 40) lights.shift();
+    lights.push({ x, y, r: r * K, color, life, max: life });
+  };
+  const glow = (x: number, y: number, r: number, color: string, a: number) => {
+    if (a <= 0.01 || r <= 0) return;
+    g.globalAlpha = Math.min(1, a);
+    g.drawImage(glowSprite(color), x - r, y - r, r * 2, r * 2);
+  };
+  /** A soft glowing band behind a beam. */
+  const glowLine = (x0: number, y0: number, x1: number, y1: number, color: string, width: number, a: number) => {
+    if (a <= 0.01) return;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = a;
+    g.strokeStyle = color;
+    g.lineCap = 'round';
+    for (const [w, al] of [
+      [width * 3, 0.08],
+      [width * 1.6, 0.16],
+    ] as const) {
+      g.globalAlpha = a * al;
+      g.lineWidth = w * K;
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.stroke();
+    }
+    g.restore();
+  };
+  const ENERGY_FX = new Set(['beam', 'drone', 'rail', 'pulse', 'tesla', 'frost']);
+  const BOOM_FX = new Set(['missiles', 'shell', 'grenade', 'hammer']);
+  const lightColor = (fx: string) =>
+    fx === 'frost'
+      ? '#9fe8ff'
+      : fx === 'tesla'
+        ? '#b48cff'
+        : fx === 'acid'
+          ? '#9be14a'
+          : ENERGY_FX.has(fx)
+            ? '#3cf0ec'
+            : fx === 'flame'
+              ? '#ff7a2f'
+              : '#ffc45a';
   const brokenUp = [false, false];
   const vel = [
     { x: 0, y: 0, ratio: 0 },
@@ -841,6 +908,14 @@ export const createRenderer = (
       const foe = pos[1 - ev.by]!;
       const fx = fxOf(ev);
       const m = gun(me, foe, ev.slot);
+      if (!['punch', 'slash', 'thrust', 'spike', 'saw', 'hammer', 'ram', 'arrow', 'harpoon'].includes(fx))
+        addLight(
+          m.x,
+          m.y,
+          fx === 'rail' ? 34 : fx === 'flame' ? 30 : fx === 'minigun' || fx === 'saw' ? 12 : 20,
+          lightColor(fx),
+          fx === 'rail' ? 0.45 : 0.16
+        );
       if (!quiet || ev.dmg > 140) sfx.weapon(fx, ev.by);
       if (ev.crit) {
         sfx.crit();
@@ -1005,6 +1080,9 @@ export const createRenderer = (
         bursts.push({ x: at.x, y: at.y - 16, t, word: 'x2!', big: false });
         sfx.gamble(true);
       } else if (ev.gamble === 'half') sfx.gamble(false);
+      if (BOOM_FX.has(fx)) addLight(at.x, at.y, big ? 70 : 50, '#ff9a3c', 0.55);
+      else if (ev.crit || big) addLight(at.x, at.y, 40, lightColor(fx), 0.35);
+      else if (fx !== 'saw' && fx !== 'minigun') addLight(at.x, at.y, 16, lightColor(fx), 0.14);
       switch (fx) {
         case 'missiles':
           spawn(at.x, at.y, 14, ['#ffffff', '#ffd23f', '#ff7a2f', '#c0392b', '#5b5148'], 34, 0.55, 2, 0, -0.2, 1, 1);
@@ -1217,7 +1295,7 @@ export const createRenderer = (
     // ── draw ──
     g.save();
     if (shake > 0.2) {
-      g.translate(Math.round((rng.next() - 0.5) * shake * 2), Math.round((rng.next() - 0.5) * shake * 2));
+      g.translate(Math.round((rng.next() - 0.5) * shake * 2 * K), Math.round((rng.next() - 0.5) * shake * 2 * K));
       shake *= Math.pow(0.02, dt);
     }
     g.drawImage(floor, 0, 0);
@@ -1462,6 +1540,44 @@ export const createRenderer = (
       }
 
       if (m.hp > 0) {
+        // battle damage: scorch marks and scratches pile up on the torso as HP drops,
+        // then sparks and smoke when it's nearly done
+        const hpK = m.hp / Math.max(1, result.maxHp[i]!);
+        const wear = Math.max(0, Math.min(1, (0.85 - hpK) / 0.7));
+        if (wear > 0) {
+          const cx = x;
+          const cy = y + bobY - SH * 0.12;
+          const n = Math.round(wear * 9);
+          for (let s = 0; s < n; s++) {
+            const h1 = ((i + 1) * 9301 + s * 49297) % 233280;
+            const h2 = (h1 * 9301 + 49297) % 233280;
+            const sx = Math.round(cx + (h1 / 233280 - 0.5) * SW * 0.34);
+            const sy = Math.round(cy + (h2 / 233280 - 0.5) * SH * 0.28);
+            if (s % 3 === 0) {
+              g.fillStyle = 'rgba(20,18,16,0.55)'; // soot
+              g.fillRect(sx - 1, sy - 1, 3, 2);
+            } else {
+              g.fillStyle = s % 3 === 1 ? 'rgba(20,18,16,0.7)' : 'rgba(255,255,255,0.45)'; // scratch + bright edge
+              g.fillRect(sx, sy, 2 + (s % 2), 1);
+            }
+          }
+          if (hpK < 0.35 && rng.chance(dt * (hpK < 0.15 ? 14 : 6))) {
+            spawn(
+              cx + (rng.next() - 0.5) * SW * 0.3,
+              cy - 4,
+              1,
+              ['#5b5148', '#3a342e', '#8a8478'],
+              10,
+              1.1,
+              2,
+              0,
+              -1,
+              0.3,
+              2
+            );
+            if (rng.chance(0.35)) spawn(cx + (rng.next() - 0.5) * SW * 0.3, cy, 2, ['#ffffff', '#ffd23f'], 40, 0.25, 1);
+          }
+        }
         // rail gun charging: a growing cyan glow at the barrel right before it fires
         const rail = railTimes[i]!.find((rt) => rt > t && rt - t <= 6);
         if (rail !== undefined) {
@@ -1610,7 +1726,7 @@ export const createRenderer = (
           const f = firstFire.get(`${i}:${slot}`);
           if (f === undefined || t < f || t > f + 14) continue;
           const name = getPart(builds[i]!.parts[slot]).name.toUpperCase();
-          g.font = '8px Silkscreen, monospace';
+          g.font = `${FONT}px Silkscreen, monospace`;
           g.textAlign = 'center';
           g.textBaseline = 'top';
           const w2 = Math.ceil(g.measureText(name).width) + 4;
@@ -1649,7 +1765,7 @@ export const createRenderer = (
             );
         }
         if (Math.floor(t * 4) % 2 === 0) {
-          g.font = '8px Silkscreen, monospace';
+          g.font = `${FONT}px Silkscreen, monospace`;
           g.textAlign = 'center';
           g.textBaseline = 'top';
           const ty = Math.round(y + SH / 2 + 2);
@@ -1707,7 +1823,7 @@ export const createRenderer = (
 
       // name plate
       const tag = getTags()[i]!;
-      g.font = '8px Silkscreen, monospace';
+      g.font = `${FONT}px Silkscreen, monospace`;
       g.textAlign = 'center';
       g.textBaseline = 'top';
       const tw = Math.ceil(g.measureText(tag).width) + 4;
@@ -1902,6 +2018,7 @@ export const createRenderer = (
           if (age > dur) break;
           const fade = 1 - age / dur;
           const src = fx === 'drone' ? dronePos(ev.by, me, t) : from;
+          glowLine(src.x, src.y, to.x, to.y, '#3cf0ec', fx === 'beam' ? 4 : 2, fade);
           g.globalAlpha = fade;
           if (fx === 'beam') line(src.x, src.y, to.x, to.y, '#127475', Math.floor(age * 10) % 2 === 0 ? 4 : 3);
           line(src.x, src.y, to.x, to.y, '#3cf0ec', fx === 'beam' ? 2 : 1);
@@ -1913,6 +2030,7 @@ export const createRenderer = (
           const dur = 4;
           if (age > dur) break;
           const fade = 1 - age / dur;
+          glowLine(from.x, from.y, to.x, to.y, '#3cf0ec', 6, fade);
           g.globalAlpha = fade;
           line(from.x, from.y, to.x, to.y, '#127475', 5);
           line(from.x, from.y, to.x, to.y, '#3cf0ec', 3);
@@ -1931,6 +2049,10 @@ export const createRenderer = (
         case 'pulse': {
           if (age > flight) break;
           const p = at(age / flight);
+          g.globalCompositeOperation = 'lighter';
+          glow(p.x, p.y, 12 * K, '#3cf0ec', 0.3);
+          g.globalCompositeOperation = 'source-over';
+          g.globalAlpha = 1;
           line(p.x - ux * 9, p.y - uy * 9, p.x, p.y, '#127475', 3);
           line(p.x - ux * 8, p.y - uy * 8, p.x, p.y, '#3cf0ec', 2);
           g.fillStyle = '#ffffff';
@@ -2062,8 +2184,37 @@ export const createRenderer = (
       g.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);
     }
 
+    // light pass: additive glows over everything drawn so far
+    if (lights.length) {
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      for (let i = lights.length - 1; i >= 0; i--) {
+        const L = lights[i]!;
+        L.life -= dt;
+        if (L.life <= 0) {
+          lights.splice(i, 1);
+          continue;
+        }
+        const k = L.life / L.max;
+        glow(L.x, L.y, L.r * (0.8 + 0.2 * k), L.color, 0.32 * k);
+        // a flattened pool of light on the ground under it
+        g.globalAlpha = 0.22 * k;
+        g.drawImage(glowSprite(L.color), L.x - L.r * 1.4, L.y + 8 * K - L.r * 0.45, L.r * 2.8, L.r * 0.9);
+      }
+      g.restore();
+    }
+    // glowing projectiles: energy particles carry their own small halo
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const p of particles) {
+      const c = p.colors[0];
+      if (c === '#3cf0ec' || c === '#ffd23f' || c === '#ff7a2f' || c === '#b48cff')
+        glow(p.x, p.y, p.size * 3, c, 0.25 * (p.life / p.max));
+    }
+    g.restore();
+
     // damage numbers (show when the hit lands)
-    g.font = '8px Silkscreen, monospace';
+    g.font = `${FONT}px Silkscreen, monospace`;
     g.textAlign = 'center';
     g.textBaseline = 'top';
     for (let i = nextEvent - 1; i >= 0; i--) {
@@ -2153,7 +2304,7 @@ export const createRenderer = (
         if (age > 7) bursts.splice(k, 1);
         continue;
       }
-      const r = Math.round(4 + age * (b.big ? 7 : 5));
+      const r = Math.round((4 + age * (b.big ? 7 : 5)) * K);
       g.globalAlpha = Math.max(0, 1 - age / 4);
       g.strokeStyle = '#ffffff';
       g.lineWidth = 1;
@@ -2161,13 +2312,13 @@ export const createRenderer = (
       g.ellipse(Math.round(b.x), Math.round(b.y + 10), r, Math.round(r * 0.45), 0, 0, Math.PI * 2);
       g.stroke();
       g.globalAlpha = 1;
-      const size = b.big ? 16 : 12;
+      const size = (b.big ? 16 : 12) * K;
       const pop = age < 1 ? 1.25 : 1;
       g.font = `${Math.round(size * pop)}px Silkscreen, monospace`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      const wy = Math.round(b.y + 4 - Math.min(age, 3) * 2);
-      const wx = Math.round(b.x + 26);
+      const wy = Math.round(b.y + (4 - Math.min(age, 3) * 2) * K);
+      const wx = Math.round(b.x + 26 * K);
       if (age < 5 || Math.floor(t * 4) % 2 === 0) {
         g.fillStyle = '#1b1a17';
         for (const [ox2, oy2] of [
@@ -2185,7 +2336,7 @@ export const createRenderer = (
     }
 
     // special-move banners
-    g.font = '8px Silkscreen, monospace';
+    g.font = `${FONT}px Silkscreen, monospace`;
     g.textAlign = 'center';
     g.textBaseline = 'top';
     for (const sp of result.specials) {
@@ -2268,7 +2419,13 @@ export const createRenderer = (
 
     lastT = t;
     return (
-      particles.length > 0 || pieces.length > 0 || shake > 0.2 || flash > 0 || Math.abs(cam.zoom - 1) > 0.01 || ring > 0
+      particles.length > 0 ||
+      lights.length > 0 ||
+      pieces.length > 0 ||
+      shake > 0.2 ||
+      flash > 0 ||
+      Math.abs(cam.zoom - 1) > 0.01 ||
+      ring > 0
     );
   };
 
