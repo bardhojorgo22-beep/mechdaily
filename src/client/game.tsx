@@ -186,8 +186,8 @@ const Header = ({ data }: { data: InitResponse }) => (
 );
 
 const FactionPicker = ({ onPick }: { onPick: (f: FactionId) => void }) => (
-  <div className="fixed inset-0 z-20 grid-paper flex flex-col justify-center p-4 gap-3">
-    <div className="font-display font-black text-3xl leading-none">Pick a side</div>
+  <div className="fixed inset-0 z-20 grid-paper flex flex-col justify-center p-4 gap-3 overflow-x-hidden">
+    <div className="font-display font-black text-2xl leading-none">Pick a side</div>
     <div className="text-sm">Every match your faction wins adds to its score. You can't switch later.</div>
     {FACTION_IDS.map((id) => {
       const f = FACTIONS[id];
@@ -684,7 +684,7 @@ export const App = () => {
                   <div className="font-display font-black text-xl leading-none truncate">{build.name}</div>
                   <div className="text-[11px] text-mute">“{buildTitle(build, arena)}”</div>
                 </div>
-                <button className="btn bg-card text-sm" onClick={() => setScreen('garage')}>
+                <button className="btn bg-card text-sm whitespace-nowrap" onClick={() => setScreen('garage')}>
                   Garage
                 </button>
                 <button className="btn bg-teal text-sm" onClick={() => setScreen('practice')}>
@@ -791,7 +791,7 @@ export const App = () => {
         {screen === 'practice' && (
           <>
             <div className="flex items-center gap-2">
-              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
+              <button className="btn bg-card text-sm whitespace-nowrap" onClick={() => setScreen('home')}>
                 ← Back
               </button>
               <div className="font-display font-black text-2xl">Practice</div>
@@ -805,7 +805,7 @@ export const App = () => {
                 onClick={() => practice(b, `${level} bot`)}
               >
                 <PixelMech build={b} size={56} />
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span
                       className="tag text-white"
@@ -813,11 +813,11 @@ export const App = () => {
                     >
                       {level}
                     </span>
-                    <span className="font-display font-black text-lg leading-none">{b.name}</span>
+                    <span className="font-display font-black text-base leading-none">{b.name}</span>
                   </div>
                   <div className="text-[11px] text-mute mt-0.5">“{buildTitle(b, arena)}”</div>
                 </div>
-                <span className="font-display font-black">FIGHT →</span>
+                <span className="font-display font-black whitespace-nowrap text-sm">FIGHT →</span>
               </button>
             ))}
             {data.champions.length > 0 && (
@@ -836,7 +836,7 @@ export const App = () => {
                     Day {c.dayNumber} · {c.pilot ? `u/${c.pilot}` : 'house bot'}
                   </div>
                 </div>
-                <span className="font-display font-black">FIGHT →</span>
+                <span className="font-display font-black whitespace-nowrap text-sm">FIGHT →</span>
               </button>
             ))}
           </>
@@ -864,7 +864,7 @@ export const App = () => {
         {screen === 'bracket' && (
           <>
             <div className="flex items-center gap-2">
-              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
+              <button className="btn bg-card text-sm whitespace-nowrap" onClick={() => setScreen('home')}>
                 ← Back
               </button>
               <div className="font-display font-black text-2xl">
@@ -880,7 +880,7 @@ export const App = () => {
         {screen === 'challenge' && (
           <>
             <div className="flex items-center gap-2">
-              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
+              <button className="btn bg-card text-sm whitespace-nowrap" onClick={() => setScreen('home')}>
                 ← Back
               </button>
               <div className="font-display text-2xl">Challenges</div>
@@ -943,7 +943,7 @@ export const App = () => {
         {screen === 'factions' && (
           <>
             <div className="flex items-center gap-2">
-              <button className="btn bg-card text-sm" onClick={() => setScreen('home')}>
+              <button className="btn bg-card text-sm whitespace-nowrap" onClick={() => setScreen('home')}>
                 ← Back
               </button>
               <div className="font-display font-black text-2xl">Faction war</div>

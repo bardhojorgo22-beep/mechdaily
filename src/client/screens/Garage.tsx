@@ -171,7 +171,7 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <button className="btn bg-card text-sm" onClick={onBack}>
+        <button className="btn bg-card text-sm whitespace-nowrap" onClick={onBack}>
           ← Back
         </button>
         <input
@@ -185,9 +185,9 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
         />
       </div>
 
-      <div className="sticker p-3 flex gap-3 items-center">
+      <div className="sticker p-3 flex flex-wrap justify-center gap-3 items-center">
         <PixelMech key={partsKey} build={build} size={120} bob className="pop" />
-        <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <div className="flex-1 flex flex-col gap-1 min-w-[200px]">
           <Bar label="HP" value={st.hp} max={6000} text={`${st.hp}`} />
           <Bar label="ARMOR K" value={st.armorK} max={0.65} text={pct(st.armorK)} />
           <Bar label="ARMOR E" value={st.armorE} max={0.65} text={pct(st.armorE)} />
@@ -238,9 +238,12 @@ export const Garage = ({ build, arena, tax, onChange, onBack, onTestFire, found 
         </div>
       ))}
 
-      <div className="sticker p-2 flex items-center gap-2" style={{ background: '#1b1a17', color: '#efe8da' }}>
+      <div
+        className="sticker p-2 flex flex-wrap items-center gap-2"
+        style={{ background: '#1b1a17', color: '#efe8da' }}
+      >
         <span className="tag bg-sun text-ink">{style.name}</span>
-        <span className="text-[11px] flex-1">{style.plan}</span>
+        <span className="text-[11px] flex-1 min-w-[150px]">{style.plan}</span>
         {onTestFire && (
           <button className="btn bg-sun text-ink text-xs whitespace-nowrap" onClick={onTestFire}>
             🎯 Test fire

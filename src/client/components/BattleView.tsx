@@ -367,14 +367,14 @@ export const BattleView = ({
           {[1, 2, 4].map((s) => (
             <button
               key={s}
-              className={`btn flex-1 text-sm ${speed === s ? 'bg-ink text-paper' : 'bg-card'}`}
+              className={`btn flex-1 min-w-0 px-1 text-sm ${speed === s ? 'bg-ink text-paper' : 'bg-card'}`}
               onClick={() => setSpeed(s)}
             >
               {s}×
             </button>
           ))}
           <button
-            className="btn flex-1 text-sm bg-card"
+            className="btn flex-1 min-w-0 px-1 text-sm bg-card"
             onClick={() => {
               tickRef.current = result.ticks;
               setTick(result.ticks);
@@ -385,7 +385,7 @@ export const BattleView = ({
           </button>
           <button
             data-quiet
-            className="btn text-sm bg-card"
+            className="btn text-sm bg-card px-2"
             aria-label={muted ? 'Unmute' : 'Mute'}
             onClick={() => setMuted(!muted)}
           >
